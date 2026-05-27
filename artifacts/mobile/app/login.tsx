@@ -14,21 +14,32 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
+import { usePlayers } from "@/context/PlayersContext";
 import { useColors } from "@/hooks/useColors";
 
 const dojoLogo = require("../assets/images/logo.png");
+
+type PortalMode = "instructor" | "player";
 
 export default function LoginScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { login } = useAuth();
+  const { players } = usePlayers();
 
+  const [mode, setMode] = useState<PortalMode>("instructor");
+
+  // Instructor
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const handleLogin = async () => {
+  // Player
+  const [playerSearch, setPlayerSearch] = useState("");
+  const [playerError, setPlayerError] = useState("");
+
+  const handleInstructorLogin = async () => {
     if (!email.trim() || !password.trim()) {
       setError("Please enter your credentials.");
       return;
@@ -44,6 +55,30 @@ export default function LoginScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       setError("Invalid email or password. Please try again.");
     }
+  };
+
+  const handlePlayerLookup = () => {
+    const query = playerSearch.trim().toLowerCase();
+    if (!query) {
+      setPlayerError("Please enter your name to look up your profile.");
+      return;
+    }
+    const found = players.find((p) =>
+      p.name.toLowerCase().includes(query)
+    );
+    if (!found) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      setPlayerError("No player found with that name. Ask your instructor to add your profile.");
+      return;
+    }
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    router.push(`/player-portal/${found.id}`);
+  };
+
+  const switchMode = (next: PortalMode) => {
+    setMode(next);
+    setError("");
+    setPlayerError("");
   };
 
   return (
@@ -62,90 +97,151 @@ export default function LoginScreen() {
           ]}
         >
           <View style={styles.header}>
-            <Image
-              source={dojoLogo}
-              style={styles.logoImage}
-              resizeMode="contain"
-            />
+            <Image source={dojoLogo} style={styles.logoImage} resizeMode="contain" />
             <View style={[styles.divider, { backgroundColor: colors.primary }]} />
             <Text style={[styles.portalLabel, { color: colors.primary }]}>
-              INSTRUCTOR PORTAL
+              {mode === "instructor" ? "INSTRUCTOR PORTAL" : "PLAYER PORTAL"}
             </Text>
           </View>
 
-          <View
-            style={[
-              styles.card,
-              { backgroundColor: colors.card, borderColor: colors.border },
-            ]}
-          >
-            <Text style={[styles.cardTitle, { color: colors.foreground }]}>
-              Sign In
-            </Text>
-            <Text style={[styles.cardSub, { color: colors.mutedForeground }]}>
-              Access restricted to Sensei & Senpai
-            </Text>
-
-            <View style={styles.fieldGroup}>
-              <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>
-                EMAIL
-              </Text>
-              <TextInput
-                style={[
-                  styles.input,
-                  { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.background },
-                ]}
-                value={email}
-                onChangeText={setEmail}
-                placeholder="instructor@kagayan.com"
-                placeholderTextColor={colors.mutedForeground}
-                autoCapitalize="none"
-                keyboardType="email-address"
-                autoComplete="email"
-              />
-            </View>
-
-            <View style={styles.fieldGroup}>
-              <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>
-                PASSWORD
-              </Text>
-              <TextInput
-                style={[
-                  styles.input,
-                  { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.background },
-                ]}
-                value={password}
-                onChangeText={setPassword}
-                placeholder="••••••••"
-                placeholderTextColor={colors.mutedForeground}
-                secureTextEntry
-              />
-            </View>
-
-            {error ? (
-              <View style={[styles.errorBox, { backgroundColor: "#FEE2E2" }]}>
-                <Text style={styles.errorText}>{error}</Text>
-              </View>
-            ) : null}
-
+          {/* Portal toggle */}
+          <View style={[styles.toggle, { backgroundColor: "rgba(255,255,255,0.08)" }]}>
             <Pressable
-              onPress={handleLogin}
-              disabled={loading}
-              style={({ pressed }) => [
-                styles.loginBtn,
-                { backgroundColor: colors.primary, opacity: pressed || loading ? 0.8 : 1 },
+              onPress={() => switchMode("instructor")}
+              style={[
+                styles.toggleOption,
+                mode === "instructor" && { backgroundColor: colors.primary },
               ]}
             >
-              {loading ? (
-                <ActivityIndicator color="#FFF" />
-              ) : (
-                <Text style={styles.loginBtnText}>SIGN IN</Text>
-              )}
+              <Text
+                style={[
+                  styles.toggleText,
+                  { color: mode === "instructor" ? "#FFF" : "#9CA3AF" },
+                ]}
+              >
+                Instructor
+              </Text>
             </Pressable>
+            <Pressable
+              onPress={() => switchMode("player")}
+              style={[
+                styles.toggleOption,
+                mode === "player" && { backgroundColor: colors.accent },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.toggleText,
+                  { color: mode === "player" ? "#FFF" : "#9CA3AF" },
+                ]}
+              >
+                Player
+              </Text>
+            </Pressable>
+          </View>
 
-            <Text style={[styles.hintText, { color: colors.mutedForeground }]}>
-              Demo: sensei@kagayan.com / sensei123
-            </Text>
+          {/* Card */}
+          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            {mode === "instructor" ? (
+              <>
+                <Text style={[styles.cardTitle, { color: colors.foreground }]}>Sign In</Text>
+                <Text style={[styles.cardSub, { color: colors.mutedForeground }]}>
+                  Access restricted to Sensei &amp; Senpai
+                </Text>
+
+                <View style={styles.fieldGroup}>
+                  <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>EMAIL</Text>
+                  <TextInput
+                    style={[styles.input, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.background }]}
+                    value={email}
+                    onChangeText={setEmail}
+                    placeholder="instructor@kagayan.com"
+                    placeholderTextColor={colors.mutedForeground}
+                    autoCapitalize="none"
+                    keyboardType="email-address"
+                    autoComplete="email"
+                  />
+                </View>
+
+                <View style={styles.fieldGroup}>
+                  <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>PASSWORD</Text>
+                  <TextInput
+                    style={[styles.input, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.background }]}
+                    value={password}
+                    onChangeText={setPassword}
+                    placeholder="••••••••"
+                    placeholderTextColor={colors.mutedForeground}
+                    secureTextEntry
+                  />
+                </View>
+
+                {error ? (
+                  <View style={[styles.errorBox, { backgroundColor: "#FEE2E2" }]}>
+                    <Text style={styles.errorText}>{error}</Text>
+                  </View>
+                ) : null}
+
+                <Pressable
+                  onPress={handleInstructorLogin}
+                  disabled={loading}
+                  style={({ pressed }) => [
+                    styles.actionBtn,
+                    { backgroundColor: colors.primary, opacity: pressed || loading ? 0.8 : 1 },
+                  ]}
+                >
+                  {loading ? (
+                    <ActivityIndicator color="#FFF" />
+                  ) : (
+                    <Text style={styles.actionBtnText}>SIGN IN</Text>
+                  )}
+                </Pressable>
+
+                <Text style={[styles.hintText, { color: colors.mutedForeground }]}>
+                  Demo: sensei@kagayan.com / sensei123
+                </Text>
+              </>
+            ) : (
+              <>
+                <Text style={[styles.cardTitle, { color: colors.foreground }]}>View My Profile</Text>
+                <Text style={[styles.cardSub, { color: colors.mutedForeground }]}>
+                  Enter your name to find your profile
+                </Text>
+
+                <View style={styles.fieldGroup}>
+                  <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>YOUR NAME</Text>
+                  <TextInput
+                    style={[styles.input, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.background }]}
+                    value={playerSearch}
+                    onChangeText={(t) => { setPlayerSearch(t); setPlayerError(""); }}
+                    placeholder="e.g. Carlos"
+                    placeholderTextColor={colors.mutedForeground}
+                    autoCapitalize="words"
+                    returnKeyType="search"
+                    onSubmitEditing={handlePlayerLookup}
+                  />
+                </View>
+
+                {playerError ? (
+                  <View style={[styles.errorBox, { backgroundColor: "#FEE2E2" }]}>
+                    <Text style={styles.errorText}>{playerError}</Text>
+                  </View>
+                ) : null}
+
+                <Pressable
+                  onPress={handlePlayerLookup}
+                  style={({ pressed }) => [
+                    styles.actionBtn,
+                    { backgroundColor: colors.accent, opacity: pressed ? 0.8 : 1 },
+                  ]}
+                >
+                  <Text style={styles.actionBtnText}>FIND MY PROFILE</Text>
+                </Pressable>
+
+                <Text style={[styles.hintText, { color: colors.mutedForeground }]}>
+                  Demo: try "Carlos" or "Maria"
+                </Text>
+              </>
+            )}
           </View>
         </View>
       </KeyboardAvoidingView>
@@ -160,7 +256,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 24,
     justifyContent: "center",
-    gap: 32,
+    gap: 24,
   },
   header: {
     alignItems: "center",
@@ -174,12 +270,28 @@ const styles = StyleSheet.create({
     width: 40,
     height: 3,
     borderRadius: 2,
-    marginVertical: 8,
+    marginVertical: 6,
   },
   portalLabel: {
     fontSize: 11,
     fontFamily: "Inter_600SemiBold",
     letterSpacing: 2,
+  },
+  toggle: {
+    flexDirection: "row",
+    borderRadius: 12,
+    padding: 4,
+    gap: 4,
+  },
+  toggleOption: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 9,
+    alignItems: "center",
+  },
+  toggleText: {
+    fontSize: 13,
+    fontFamily: "Inter_600SemiBold",
   },
   card: {
     borderRadius: 16,
@@ -219,14 +331,14 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: "Inter_500Medium",
   },
-  loginBtn: {
+  actionBtn: {
     borderRadius: 10,
     paddingVertical: 14,
     alignItems: "center",
     justifyContent: "center",
     marginTop: 4,
   },
-  loginBtnText: {
+  actionBtnText: {
     color: "#FFFFFF",
     fontSize: 14,
     fontFamily: "Inter_700Bold",

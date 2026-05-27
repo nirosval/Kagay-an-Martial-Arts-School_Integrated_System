@@ -41,6 +41,7 @@ function RootLayoutNav() {
       <Stack.Screen name="add-player" options={{ headerShown: false, presentation: "modal" }} />
       <Stack.Screen name="player/[id]" options={{ headerShown: false }} />
       <Stack.Screen name="edit-player/[id]" options={{ headerShown: false }} />
+      <Stack.Screen name="player-portal/[id]" options={{ headerShown: false }} />
     </Stack>
   );
 }
