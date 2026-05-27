@@ -167,8 +167,8 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   logoImage: {
-    width: 240,
-    height: 240,
+    width: 260,
+    height: 260,
   },
   divider: {
     width: 40,
