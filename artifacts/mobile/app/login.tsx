@@ -177,9 +177,6 @@ export default function LoginScreen() {
                   </Text>
                 </Pressable>
 
-                <Text style={[styles.hint, { color: colors.mutedForeground }]}>
-                  Demo: sensei@kagayan.com / sensei123
-                </Text>
               </>
             ) : (
               <>
@@ -264,7 +261,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   header: { alignItems: "center", gap: 6 },
-  logoImage: { width: 260, height: 260 },
+  logoImage: { width: 160, height: 160 },
   divider: { width: 40, height: 3, borderRadius: 2, marginVertical: 6 },
   portalLabel: { fontSize: 11, fontFamily: "Inter_600SemiBold", letterSpacing: 2 },
   toggle: { flexDirection: "row", borderRadius: 12, padding: 4, gap: 4 },
