@@ -3,6 +3,7 @@ import { router } from "expo-router";
 import React, { useState } from "react";
 import {
   ActivityIndicator,
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -14,6 +15,8 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
+
+const dojoLogo = require("../assets/images/logo.png");
 
 export default function LoginScreen() {
   const colors = useColors();
@@ -59,11 +62,11 @@ export default function LoginScreen() {
           ]}
         >
           <View style={styles.header}>
-            <View style={[styles.logoMark, { borderColor: colors.primary }]}>
-              <Text style={[styles.logoLetter, { color: colors.primary }]}>K</Text>
-            </View>
-            <Text style={styles.dojo}>KAGAY-AN</Text>
-            <Text style={styles.subtitle}>MARTIAL ARTS SCHOOL</Text>
+            <Image
+              source={dojoLogo}
+              style={styles.logoImage}
+              resizeMode="contain"
+            />
             <View style={[styles.divider, { backgroundColor: colors.primary }]} />
             <Text style={[styles.portalLabel, { color: colors.primary }]}>
               INSTRUCTOR PORTAL
@@ -163,30 +166,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 6,
   },
-  logoMark: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    borderWidth: 3,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 8,
-  },
-  logoLetter: {
-    fontSize: 36,
-    fontFamily: "Inter_700Bold",
-  },
-  dojo: {
-    color: "#FFFFFF",
-    fontSize: 28,
-    fontFamily: "Inter_700Bold",
-    letterSpacing: 4,
-  },
-  subtitle: {
-    color: "#9CA3AF",
-    fontSize: 12,
-    fontFamily: "Inter_500Medium",
-    letterSpacing: 3,
+  logoImage: {
+    width: 200,
+    height: 200,
   },
   divider: {
     width: 40,
