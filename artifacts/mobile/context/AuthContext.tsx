@@ -6,46 +6,40 @@ import React, {
   useEffect,
   useState,
 } from "react";
-import { AdminUser } from "@/types";
+import { AdminAccount, AdminUser, UserRole } from "@/types";
 
 interface AuthContextType {
   user: AdminUser | null;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<boolean>;
   logout: () => Promise<void>;
+  register: (name: string, email: string, password: string, role: UserRole) => Promise<{ success: boolean; error?: string }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const MOCK_ADMINS: Array<AdminUser & { password: string }> = [
-  {
-    id: "1",
-    email: "sensei@kagayan.com",
-    password: "sensei123",
-    name: "Sensei Rivera",
-    role: "sensei",
-  },
-  {
-    id: "2",
-    email: "senpai@kagayan.com",
-    password: "senpai123",
-    name: "Senpai Santos",
-    role: "senpai",
-  },
+const ACCOUNTS_KEY = "kagayan_admin_accounts";
+
+const DEFAULT_ACCOUNTS: AdminAccount[] = [
+  { id: "1", email: "sensei@kagayan.com", password: "sensei123", name: "Sensei Rivera", role: "sensei" },
+  { id: "2", email: "senpai@kagayan.com", password: "senpai123", name: "Senpai Santos", role: "senpai" },
 ];
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AdminUser | null>(null);
+  const [accounts, setAccounts] = useState<AdminAccount[]>(DEFAULT_ACCOUNTS);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    AsyncStorage.getItem("kagayan_user").then((stored) => {
-      if (stored) {
-        try {
-          setUser(JSON.parse(stored));
-        } catch {
-          setUser(null);
-        }
+    Promise.all([
+      AsyncStorage.getItem("kagayan_user"),
+      AsyncStorage.getItem(ACCOUNTS_KEY),
+    ]).then(([storedUser, storedAccounts]) => {
+      if (storedUser) {
+        try { setUser(JSON.parse(storedUser)); } catch { /* ignore */ }
+      }
+      if (storedAccounts) {
+        try { setAccounts(JSON.parse(storedAccounts)); } catch { /* ignore */ }
       }
       setIsLoading(false);
     });
@@ -53,7 +47,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = useCallback(
     async (email: string, password: string): Promise<boolean> => {
-      const found = MOCK_ADMINS.find(
+      const all = await AsyncStorage.getItem(ACCOUNTS_KEY);
+      const list: AdminAccount[] = all ? JSON.parse(all) : DEFAULT_ACCOUNTS;
+      const found = list.find(
         (a) => a.email === email.toLowerCase() && a.password === password
       );
       if (!found) return false;
@@ -70,8 +66,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await AsyncStorage.removeItem("kagayan_user");
   }, []);
 
+  const register = useCallback(
+    async (name: string, email: string, password: string, role: UserRole): Promise<{ success: boolean; error?: string }> => {
+      const stored = await AsyncStorage.getItem(ACCOUNTS_KEY);
+      const list: AdminAccount[] = stored ? JSON.parse(stored) : DEFAULT_ACCOUNTS;
+      if (list.find((a) => a.email === email.toLowerCase())) {
+        return { success: false, error: "An account with this email already exists." };
+      }
+      const newAccount: AdminAccount = {
+        id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+        email: email.toLowerCase(),
+        password,
+        name,
+        role,
+      };
+      const updated = [...list, newAccount];
+      await AsyncStorage.setItem(ACCOUNTS_KEY, JSON.stringify(updated));
+      setAccounts(updated);
+      const { password: _pw, ...adminUser } = newAccount;
+      setUser(adminUser);
+      await AsyncStorage.setItem("kagayan_user", JSON.stringify(adminUser));
+      return { success: true };
+    },
+    []
+  );
+
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, logout }}>
+    <AuthContext.Provider value={{ user, isLoading, login, logout, register }}>
       {children}
     </AuthContext.Provider>
   );

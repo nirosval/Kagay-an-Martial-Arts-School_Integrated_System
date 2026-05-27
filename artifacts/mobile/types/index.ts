@@ -7,6 +7,10 @@ export interface AdminUser {
   role: UserRole;
 }
 
+export interface AdminAccount extends AdminUser {
+  password: string;
+}
+
 export type MembershipStatus = "active_member" | "active_nonmember" | "inactive";
 
 export interface Achievement {
@@ -41,4 +45,11 @@ export interface PlayerInput {
   membership_status: MembershipStatus;
   belt_rank: string;
   photo_url?: string | null;
+}
+
+export interface PlayerAccount {
+  id: string;
+  email: string;
+  password: string;
+  playerId: string;
 }

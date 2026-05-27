@@ -15,6 +15,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
+import { PlayerAuthProvider } from "@/context/PlayerAuthContext";
 import { PlayersProvider } from "@/context/PlayersContext";
 
 SplashScreen.preventAutoHideAsync();
@@ -42,6 +43,8 @@ function RootLayoutNav() {
       <Stack.Screen name="player/[id]" options={{ headerShown: false }} />
       <Stack.Screen name="edit-player/[id]" options={{ headerShown: false }} />
       <Stack.Screen name="player-portal/[id]" options={{ headerShown: false }} />
+      <Stack.Screen name="register/player" options={{ headerShown: false }} />
+      <Stack.Screen name="register/instructor" options={{ headerShown: false }} />
     </Stack>
   );
 }
@@ -70,7 +73,9 @@ export default function RootLayout() {
             <KeyboardProvider>
               <AuthProvider>
                 <PlayersProvider>
-                  <RootLayoutNav />
+                  <PlayerAuthProvider>
+                    <RootLayoutNav />
+                  </PlayerAuthProvider>
                 </PlayersProvider>
               </AuthProvider>
             </KeyboardProvider>
