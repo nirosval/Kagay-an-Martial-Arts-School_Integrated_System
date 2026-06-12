@@ -15,6 +15,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
+import { AttendanceProvider } from "@/context/AttendanceContext";
 import { PlayerAuthProvider } from "@/context/PlayerAuthContext";
 import { PlayersProvider } from "@/context/PlayersContext";
 
@@ -38,6 +39,7 @@ function RootLayoutNav() {
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="login" options={{ headerShown: false }} />
+      <Stack.Screen name="forgot-password" options={{ headerShown: false }} />
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="add-player" options={{ headerShown: false, presentation: "modal" }} />
       <Stack.Screen name="player/[id]" options={{ headerShown: false }} />
@@ -73,9 +75,11 @@ export default function RootLayout() {
             <KeyboardProvider>
               <AuthProvider>
                 <PlayersProvider>
-                  <PlayerAuthProvider>
-                    <RootLayoutNav />
-                  </PlayerAuthProvider>
+                  <AttendanceProvider>
+                    <PlayerAuthProvider>
+                      <RootLayoutNav />
+                    </PlayerAuthProvider>
+                  </AttendanceProvider>
                 </PlayersProvider>
               </AuthProvider>
             </KeyboardProvider>

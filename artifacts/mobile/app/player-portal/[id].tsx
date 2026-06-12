@@ -1,7 +1,7 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router, useLocalSearchParams } from "expo-router";
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Alert,
   Platform,
@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BeltBadge } from "@/components/BeltBadge";
 import { StatBlock } from "@/components/StatBlock";
 import { StatusBadge } from "@/components/StatusBadge";
+import { useAttendance } from "@/context/AttendanceContext";
 import { usePlayerAuth } from "@/context/PlayerAuthContext";
 import { usePlayers } from "@/context/PlayersContext";
 import { useColors } from "@/hooks/useColors";
@@ -25,14 +26,37 @@ const BELT_RANKS = [
   "White Belt", "Yellow Belt", "Orange Belt", "Green Belt",
   "Blue Belt", "Purple Belt", "Brown Belt", "Black Belt",
 ];
-
 const MEMBERSHIP_OPTIONS: Array<{ label: string; value: MembershipStatus }> = [
   { label: "Active Member", value: "active_member" },
   { label: "Active (Non-Member)", value: "active_nonmember" },
   { label: "Inactive", value: "inactive" },
 ];
+const SESSIONS_PER_PROMO = 12;
 
-type Tab = "profile" | "edit" | "achievements";
+type Tab = "profile" | "edit" | "achievements" | "attendance";
+
+function formatTime(iso: string) {
+  const d = new Date(iso);
+  let h = d.getHours();
+  const m = d.getMinutes().toString().padStart(2, "0");
+  const ampm = h >= 12 ? "PM" : "AM";
+  h = h % 12 || 12;
+  return `${h}:${m} ${ampm}`;
+}
+function formatDate(iso: string) {
+  return new Date(iso).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" });
+}
+function clockStr(d: Date) {
+  let h = d.getHours();
+  const m = d.getMinutes().toString().padStart(2, "0");
+  const s = d.getSeconds().toString().padStart(2, "0");
+  const ampm = h >= 12 ? "PM" : "AM";
+  h = h % 12 || 12;
+  return `${h}:${m}:${s} ${ampm}`;
+}
+function todayDateLabel() {
+  return new Date().toLocaleDateString("en-PH", { weekday: "long", month: "long", day: "numeric", year: "numeric" });
+}
 
 export default function PlayerPortalScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -40,13 +64,21 @@ export default function PlayerPortalScreen() {
   const insets = useSafeAreaInsets();
   const { getPlayer, updatePlayer, addAchievement, deleteAchievement } = usePlayers();
   const { playerAccount, playerLogout } = usePlayerAuth();
+  const { timeIn, timeOut, getTodayRecord, getPlayerRecords, getPromoProgress } = useAttendance();
 
   const player = getPlayer(id ?? "");
   const isOwner = playerAccount?.playerId === id;
-
   const [tab, setTab] = useState<Tab>("profile");
 
-  // Edit form state
+  // Live clock
+  const [now, setNow] = useState(new Date());
+  const clockRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  useEffect(() => {
+    clockRef.current = setInterval(() => setNow(new Date()), 1000);
+    return () => { if (clockRef.current) clearInterval(clockRef.current); };
+  }, []);
+
+  // Edit state
   const [editBirthdate, setEditBirthdate] = useState(player?.birthdate ?? "");
   const [editWeight, setEditWeight] = useState(String(player?.weight_kg ?? ""));
   const [editHeight, setEditHeight] = useState(String(player?.height_cm ?? ""));
@@ -62,6 +94,12 @@ export default function PlayerPortalScreen() {
   const [achTitle, setAchTitle] = useState("");
   const [achDate, setAchDate] = useState("");
   const [achDesc, setAchDesc] = useState("");
+
+  // Attendance
+  const [attLoading, setAttLoading] = useState(false);
+  const todayRecord = getTodayRecord(id ?? "");
+  const playerRecords = getPlayerRecords(id ?? "");
+  const promo = getPromoProgress(id ?? "");
 
   if (!player) {
     return (
@@ -79,39 +117,20 @@ export default function PlayerPortalScreen() {
   const topPad = Platform.OS === "web" ? 67 : insets.top;
 
   const handleSaveEdit = async () => {
-    const wt = parseFloat(editWeight);
-    const ht = parseFloat(editHeight);
-    const yr = parseInt(editYearStarted, 10);
-    if (isNaN(wt) || isNaN(ht) || isNaN(yr)) {
-      setEditError("Please fill in all fields correctly.");
-      return;
-    }
-    setEditLoading(true);
-    setEditError("");
-    await updatePlayer(player.id, {
-      birthdate: editBirthdate,
-      weight_kg: wt,
-      height_cm: ht,
-      year_started: yr,
-      belt_rank: editBelt,
-      membership_status: editMembership,
-    });
-    setEditLoading(false);
-    setEditSuccess(true);
+    const wt = parseFloat(editWeight), ht = parseFloat(editHeight), yr = parseInt(editYearStarted, 10);
+    if (isNaN(wt) || isNaN(ht) || isNaN(yr)) { setEditError("Fill in all fields correctly."); return; }
+    setEditLoading(true); setEditError("");
+    await updatePlayer(player.id, { birthdate: editBirthdate, weight_kg: wt, height_cm: ht, year_started: yr, belt_rank: editBelt, membership_status: editMembership });
+    setEditLoading(false); setEditSuccess(true);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setTimeout(() => setEditSuccess(false), 2500);
   };
 
   const handleAddAchievement = async () => {
     if (!achTitle.trim()) return;
-    await addAchievement(player.id, {
-      title: achTitle.trim(),
-      date: achDate.trim() || new Date().toISOString().split("T")[0],
-      description: achDesc.trim() || undefined,
-    });
+    await addAchievement(player.id, { title: achTitle.trim(), date: achDate.trim() || new Date().toISOString().split("T")[0], description: achDesc.trim() || undefined });
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    setAchTitle(""); setAchDate(""); setAchDesc("");
-    setShowAchForm(false);
+    setAchTitle(""); setAchDate(""); setAchDesc(""); setShowAchForm(false);
   };
 
   const handleDeleteAchievement = (achId: string, title: string) => {
@@ -122,10 +141,31 @@ export default function PlayerPortalScreen() {
     ]);
   };
 
+  const handleTimeIn = async () => {
+    setAttLoading(true);
+    await timeIn(player.id);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    setAttLoading(false);
+  };
+
+  const handleTimeOut = async () => {
+    setAttLoading(true);
+    await timeOut(player.id);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    setAttLoading(false);
+  };
+
   const handleLogout = async () => {
     await playerLogout();
     router.replace("/login");
   };
+
+  const TABS: Array<{ key: Tab; label: string }> = [
+    { key: "profile", label: "Profile" },
+    { key: "edit", label: "Edit Info" },
+    { key: "achievements", label: "Awards" },
+    { key: "attendance", label: "Attendance" },
+  ];
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
@@ -139,27 +179,21 @@ export default function PlayerPortalScreen() {
               <Text style={styles.backLabel}>Portals</Text>
             </Pressable>
             {isOwner && (
-              <Pressable onPress={handleLogout} style={({ pressed }) => [styles.logoutBtn, { opacity: pressed ? 0.6 : 1 }]}>
+              <Pressable onPress={handleLogout} style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1, padding: 4 })}>
                 <Feather name="log-out" size={16} color="#9CA3AF" />
               </Pressable>
             )}
           </View>
-
           <View style={styles.heroBody}>
             <View style={[styles.avatar, { borderColor: colors.primary }]}>
-              <Text style={styles.avatarText}>
-                {player.name.split(" ").map((n) => n[0]).slice(0, 2).join("").toUpperCase()}
-              </Text>
+              <Text style={styles.avatarText}>{player.name.split(" ").map((n) => n[0]).slice(0, 2).join("").toUpperCase()}</Text>
             </View>
             <View style={styles.heroInfo}>
               <Text style={styles.heroName}>{player.name}</Text>
               <BeltBadge rank={player.belt_rank} />
-              <View style={{ marginTop: 4 }}>
-                <StatusBadge status={player.membership_status} />
-              </View>
+              <View style={{ marginTop: 4 }}><StatusBadge status={player.membership_status} /></View>
             </View>
           </View>
-
           <View style={[styles.statsStrip, { backgroundColor: "rgba(255,255,255,0.06)" }]}>
             <StatBlock label="Age" value={String(player.age)} unit=" yrs" />
             <View style={[styles.stripDiv, { backgroundColor: "rgba(255,255,255,0.15)" }]} />
@@ -170,23 +204,20 @@ export default function PlayerPortalScreen() {
             <StatBlock label="Years" value={String(yearsActive)} unit=" yr" />
           </View>
 
-          {/* Tabs */}
           {isOwner && (
-            <View style={styles.tabRow}>
-              {(["profile", "edit", "achievements"] as Tab[]).map((t) => (
-                <Pressable key={t} onPress={() => setTab(t)} style={[styles.tabItem, tab === t && { borderBottomColor: colors.primary, borderBottomWidth: 2 }]}>
-                  <Text style={[styles.tabText, { color: tab === t ? "#FFF" : "#9CA3AF" }]}>
-                    {t === "profile" ? "Profile" : t === "edit" ? "Edit Info" : "Achievements"}
-                  </Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabScroll} contentContainerStyle={styles.tabRow}>
+              {TABS.map((t) => (
+                <Pressable key={t.key} onPress={() => setTab(t.key)} style={[styles.tabItem, tab === t.key && { borderBottomColor: colors.primary, borderBottomWidth: 2 }]}>
+                  <Text style={[styles.tabText, { color: tab === t.key ? "#FFF" : "#9CA3AF" }]}>{t.label}</Text>
                 </Pressable>
               ))}
-            </View>
+            </ScrollView>
           )}
         </View>
 
         <View style={styles.body}>
 
-          {/* ── PROFILE TAB ── */}
+          {/* ── PROFILE ── */}
           {(tab === "profile" || !isOwner) && (
             <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <Text style={[styles.cardTitle, { color: colors.foreground }]}>Profile Info</Text>
@@ -203,25 +234,20 @@ export default function PlayerPortalScreen() {
               {!isOwner && (
                 <View style={[styles.footerNote, { backgroundColor: colors.muted, borderColor: colors.border }]}>
                   <Feather name="info" size={13} color={colors.mutedForeground} />
-                  <Text style={[styles.footerText, { color: colors.mutedForeground }]}>
-                    Log in as this player to edit their profile and add achievements.
-                  </Text>
+                  <Text style={[styles.footerText, { color: colors.mutedForeground }]}>Log in as this player to edit their profile and add achievements.</Text>
                 </View>
               )}
             </View>
           )}
 
-          {/* ── EDIT TAB ── */}
+          {/* ── EDIT ── */}
           {tab === "edit" && isOwner && (
             <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <Text style={[styles.cardTitle, { color: colors.foreground }]}>Edit My Info</Text>
-
               {editError ? <View style={styles.errorBox}><Text style={styles.errorText}>{editError}</Text></View> : null}
               {editSuccess ? <View style={styles.successBox}><Text style={styles.successText}>Profile updated!</Text></View> : null}
-
               <Label label="BIRTHDATE" colors={colors} />
               <TextInput style={[styles.input, iStyle(colors)]} value={editBirthdate} onChangeText={setEditBirthdate} placeholder="YYYY-MM-DD" placeholderTextColor={colors.mutedForeground} keyboardType="numbers-and-punctuation" />
-
               <View style={styles.row2}>
                 <View style={{ flex: 1 }}>
                   <Label label="HEIGHT (cm)" colors={colors} />
@@ -232,10 +258,8 @@ export default function PlayerPortalScreen() {
                   <TextInput style={[styles.input, iStyle(colors)]} value={editWeight} onChangeText={setEditWeight} keyboardType="decimal-pad" placeholderTextColor={colors.mutedForeground} />
                 </View>
               </View>
-
               <Label label="YEAR STARTED" colors={colors} />
               <TextInput style={[styles.input, iStyle(colors)]} value={editYearStarted} onChangeText={setEditYearStarted} keyboardType="number-pad" placeholderTextColor={colors.mutedForeground} />
-
               <Label label="BELT RANK" colors={colors} />
               <View style={styles.chipWrap}>
                 {BELT_RANKS.map((b) => (
@@ -245,7 +269,6 @@ export default function PlayerPortalScreen() {
                   </Pressable>
                 ))}
               </View>
-
               <Label label="MEMBERSHIP STATUS" colors={colors} />
               {MEMBERSHIP_OPTIONS.map((opt) => (
                 <Pressable key={opt.value} onPress={() => setEditMembership(opt.value)}
@@ -256,7 +279,6 @@ export default function PlayerPortalScreen() {
                   <Text style={[styles.memLabel, { color: colors.foreground }]}>{opt.label}</Text>
                 </Pressable>
               ))}
-
               <Pressable onPress={handleSaveEdit} disabled={editLoading}
                 style={({ pressed }) => [styles.saveBtn, { backgroundColor: colors.accent, opacity: pressed || editLoading ? 0.8 : 1 }]}>
                 <Text style={styles.saveBtnText}>{editLoading ? "Saving..." : "SAVE CHANGES"}</Text>
@@ -264,7 +286,7 @@ export default function PlayerPortalScreen() {
             </View>
           )}
 
-          {/* ── ACHIEVEMENTS TAB ── */}
+          {/* ── ACHIEVEMENTS ── */}
           {tab === "achievements" && isOwner && (
             <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <View style={styles.achHeader}>
@@ -277,7 +299,6 @@ export default function PlayerPortalScreen() {
                   <Feather name={showAchForm ? "x" : "plus"} size={16} color="#FFF" />
                 </Pressable>
               </View>
-
               {showAchForm && (
                 <View style={[styles.achForm, { backgroundColor: colors.background, borderColor: colors.border }]}>
                   <TextInput style={[styles.input, iStyle(colors)]} placeholder="Achievement title *" placeholderTextColor={colors.mutedForeground} value={achTitle} onChangeText={setAchTitle} />
@@ -288,7 +309,6 @@ export default function PlayerPortalScreen() {
                   </Pressable>
                 </View>
               )}
-
               {player.achievements.length === 0 ? (
                 <View style={styles.emptyAch}>
                   <Feather name="award" size={36} color={colors.mutedForeground} />
@@ -313,6 +333,121 @@ export default function PlayerPortalScreen() {
                 ))
               )}
             </View>
+          )}
+
+          {/* ── ATTENDANCE ── */}
+          {tab === "attendance" && isOwner && (
+            <>
+              {/* Clock card */}
+              <View style={[styles.card, { backgroundColor: colors.navBar, borderColor: "transparent" }]}>
+                <Text style={[styles.dateLabel, { color: "#9CA3AF" }]}>{todayDateLabel()}</Text>
+                <Text style={styles.clockText}>{clockStr(now)}</Text>
+                <View style={[styles.clockDivider, { backgroundColor: colors.primary }]} />
+
+                {!todayRecord ? (
+                  <Pressable onPress={handleTimeIn} disabled={attLoading}
+                    style={({ pressed }) => [styles.timeBtn, { backgroundColor: "#10B981", opacity: pressed || attLoading ? 0.8 : 1 }]}>
+                    <Feather name="clock" size={18} color="#FFF" />
+                    <Text style={styles.timeBtnText}>{attLoading ? "Recording..." : "Time IN"}</Text>
+                  </Pressable>
+                ) : todayRecord.time_out === null ? (
+                  <View style={{ gap: 10 }}>
+                    <View style={styles.checkedInRow}>
+                      <View style={[styles.greenDot, { backgroundColor: "#10B981" }]} />
+                      <Text style={{ color: "#FFF", fontSize: 13, fontFamily: "Inter_500Medium" }}>
+                        Checked in at {formatTime(todayRecord.time_in)}
+                        {todayRecord.status === "late" ? "  (Late)" : ""}
+                      </Text>
+                    </View>
+                    <Pressable onPress={handleTimeOut} disabled={attLoading}
+                      style={({ pressed }) => [styles.timeBtn, { backgroundColor: colors.primary, opacity: pressed || attLoading ? 0.8 : 1 }]}>
+                      <Feather name="clock" size={18} color="#FFF" />
+                      <Text style={styles.timeBtnText}>{attLoading ? "Recording..." : "Time OUT"}</Text>
+                    </Pressable>
+                  </View>
+                ) : (
+                  <View style={[styles.completedRow, { backgroundColor: "rgba(255,255,255,0.08)" }]}>
+                    <Feather name="check-circle" size={16} color="#10B981" />
+                    <Text style={{ color: "#FFF", fontSize: 13, fontFamily: "Inter_500Medium" }}>
+                      Session complete · {formatTime(todayRecord.time_in)} – {formatTime(todayRecord.time_out)}
+                    </Text>
+                  </View>
+                )}
+              </View>
+
+              {/* Promo progress */}
+              <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                <Text style={[styles.cardTitle, { color: colors.foreground }]}>Promo Session Progress</Text>
+                <Text style={[styles.promoSub, { color: colors.mutedForeground }]}>Block {promo.block} · {SESSIONS_PER_PROMO} sessions per promo</Text>
+
+                <View style={styles.promoRow}>
+                  <View style={{ flex: 1 }}>
+                    <View style={[styles.promoTrack, { backgroundColor: colors.border }]}>
+                      <View style={[styles.promoFill, {
+                        backgroundColor: promo.remaining === 0 ? "#10B981" : colors.accent,
+                        width: `${Math.round((promo.completed / SESSIONS_PER_PROMO) * 100)}%`,
+                      }]} />
+                    </View>
+                    <Text style={[styles.promoCount, { color: colors.foreground }]}>
+                      {promo.completed} / {SESSIONS_PER_PROMO} sessions
+                    </Text>
+                  </View>
+                  <View style={[styles.promoBubble, { backgroundColor: promo.remaining === 0 ? "#10B981" + "20" : colors.accent + "15" }]}>
+                    <Text style={[styles.promoBubbleNum, { color: promo.remaining === 0 ? "#10B981" : colors.accent }]}>
+                      {promo.remaining === 0 ? "✓" : promo.remaining}
+                    </Text>
+                    <Text style={[styles.promoBubbleLabel, { color: colors.mutedForeground }]}>
+                      {promo.remaining === 0 ? "Done" : "left"}
+                    </Text>
+                  </View>
+                </View>
+
+                {promo.remaining === 0 && (
+                  <View style={[styles.renewalBanner, { backgroundColor: "#FEF3C7", borderColor: "#F59E0B40" }]}>
+                    <Feather name="alert-circle" size={14} color="#D97706" />
+                    <Text style={styles.renewalText}>Promo block complete — renewal required for next 12 sessions.</Text>
+                  </View>
+                )}
+              </View>
+
+              {/* Attendance history */}
+              <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                <Text style={[styles.cardTitle, { color: colors.foreground }]}>Attendance History</Text>
+                {playerRecords.length === 0 ? (
+                  <View style={styles.emptyAch}>
+                    <Feather name="calendar" size={36} color={colors.mutedForeground} />
+                    <Text style={[styles.emptyAchText, { color: colors.mutedForeground }]}>No sessions recorded yet.</Text>
+                  </View>
+                ) : (
+                  playerRecords.map((rec, i) => {
+                    const duration = rec.time_out
+                      ? Math.round((new Date(rec.time_out).getTime() - new Date(rec.time_in).getTime()) / 60000)
+                      : null;
+                    return (
+                      <View key={rec.id}>
+                        {i > 0 && <View style={[styles.sep, { backgroundColor: colors.border }]} />}
+                        <View style={styles.recRow}>
+                          <View style={[styles.recDot, { backgroundColor: rec.status === "present" ? "#10B981" : "#F59E0B" }]} />
+                          <View style={{ flex: 1 }}>
+                            <Text style={[styles.recDate, { color: colors.foreground }]}>{formatDate(rec.time_in)}</Text>
+                            <Text style={[styles.recTime, { color: colors.mutedForeground }]}>
+                              IN {formatTime(rec.time_in)}
+                              {rec.time_out ? ` · OUT ${formatTime(rec.time_out)}` : " · In progress"}
+                              {duration !== null ? ` · ${duration}m` : ""}
+                            </Text>
+                          </View>
+                          <View style={[styles.recBadge, { backgroundColor: rec.status === "present" ? "#10B98118" : "#F59E0B18" }]}>
+                            <Text style={[styles.recBadgeText, { color: rec.status === "present" ? "#10B981" : "#F59E0B" }]}>
+                              {rec.status === "present" ? "Present" : "Late"}
+                            </Text>
+                          </View>
+                        </View>
+                      </View>
+                    );
+                  })
+                )}
+              </View>
+            </>
           )}
         </View>
       </ScrollView>
@@ -346,7 +481,6 @@ const styles = StyleSheet.create({
   heroTopRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingBottom: 12 },
   backBtn: { flexDirection: "row", alignItems: "center", gap: 6 },
   backLabel: { color: "#FFF", fontSize: 15, fontFamily: "Inter_500Medium" },
-  logoutBtn: { padding: 4 },
   heroBody: { flexDirection: "row", alignItems: "flex-start", gap: 16, paddingHorizontal: 20, paddingBottom: 16 },
   avatar: { width: 72, height: 72, borderRadius: 36, borderWidth: 3, backgroundColor: "#1F2937", alignItems: "center", justifyContent: "center" },
   avatarText: { color: "#FFF", fontSize: 26, fontFamily: "Inter_700Bold" },
@@ -354,8 +488,9 @@ const styles = StyleSheet.create({
   heroName: { color: "#FFF", fontSize: 22, fontFamily: "Inter_700Bold", lineHeight: 26 },
   statsStrip: { flexDirection: "row", paddingVertical: 16, paddingHorizontal: 8 },
   stripDiv: { width: 1, marginVertical: 4 },
+  tabScroll: { borderTopWidth: 0 },
   tabRow: { flexDirection: "row", paddingHorizontal: 4 },
-  tabItem: { flex: 1, alignItems: "center", paddingVertical: 12, borderBottomColor: "transparent", borderBottomWidth: 2 },
+  tabItem: { paddingHorizontal: 16, paddingVertical: 12, borderBottomColor: "transparent", borderBottomWidth: 2 },
   tabText: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
   body: { padding: 16, gap: 14 },
   card: { borderRadius: 14, borderWidth: 1, padding: 16, gap: 12 },
@@ -393,4 +528,29 @@ const styles = StyleSheet.create({
   achTitle: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
   achDate: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
   achDesc: { fontSize: 13, fontFamily: "Inter_400Regular", marginTop: 2 },
+  // Attendance
+  dateLabel: { fontSize: 13, fontFamily: "Inter_400Regular" },
+  clockText: { color: "#FFF", fontSize: 40, fontFamily: "Inter_700Bold", letterSpacing: 1 },
+  clockDivider: { height: 3, borderRadius: 2, width: 40 },
+  timeBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderRadius: 10, paddingVertical: 14 },
+  timeBtnText: { color: "#FFF", fontSize: 15, fontFamily: "Inter_700Bold", letterSpacing: 1 },
+  checkedInRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  greenDot: { width: 8, height: 8, borderRadius: 4 },
+  completedRow: { flexDirection: "row", alignItems: "center", gap: 8, borderRadius: 10, padding: 12 },
+  promoSub: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: -6 },
+  promoRow: { flexDirection: "row", alignItems: "center", gap: 14 },
+  promoTrack: { height: 10, borderRadius: 5, overflow: "hidden", marginBottom: 6 },
+  promoFill: { height: 10, borderRadius: 5 },
+  promoCount: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
+  promoBubble: { width: 56, height: 56, borderRadius: 28, alignItems: "center", justifyContent: "center" },
+  promoBubbleNum: { fontSize: 20, fontFamily: "Inter_700Bold" },
+  promoBubbleLabel: { fontSize: 10, fontFamily: "Inter_500Medium" },
+  renewalBanner: { flexDirection: "row", alignItems: "flex-start", gap: 8, borderRadius: 8, borderWidth: 1, padding: 10 },
+  renewalText: { flex: 1, color: "#92400E", fontSize: 12, fontFamily: "Inter_500Medium", lineHeight: 18 },
+  recRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 8 },
+  recDot: { width: 8, height: 8, borderRadius: 4 },
+  recDate: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
+  recTime: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
+  recBadge: { borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
+  recBadgeText: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
 });

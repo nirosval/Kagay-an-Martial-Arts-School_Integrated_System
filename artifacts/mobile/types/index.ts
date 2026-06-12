@@ -53,3 +53,14 @@ export interface PlayerAccount {
   password: string;
   playerId: string;
 }
+
+export type AttendanceStatus = "present" | "late";
+
+export interface AttendanceRecord {
+  id: string;
+  playerId: string;
+  date: string;         // YYYY-MM-DD
+  time_in: string;      // ISO timestamp
+  time_out: string | null;
+  status: AttendanceStatus;
+}
