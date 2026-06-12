@@ -6,18 +6,24 @@ interface Props {
   label: string;
   value: string;
   unit?: string;
+  textColor?: string;
+  subColor?: string;
 }
 
-export function StatBlock({ label, value, unit }: Props) {
+export function StatBlock({ label, value, unit, textColor, subColor }: Props) {
   const colors = useColors();
+
+  const valColor = textColor ?? colors.foreground;
+  const unitColor = subColor ?? colors.mutedForeground;
+  const labelColor = subColor ?? colors.mutedForeground;
 
   return (
     <View style={styles.container}>
-      <Text style={[styles.value, { color: colors.foreground }]}>
+      <Text style={[styles.value, { color: valColor }]}>
         {value}
-        {unit ? <Text style={[styles.unit, { color: colors.mutedForeground }]}>{unit}</Text> : null}
+        {unit ? <Text style={[styles.unit, { color: unitColor }]}>{unit}</Text> : null}
       </Text>
-      <Text style={[styles.label, { color: colors.mutedForeground }]}>{label}</Text>
+      <Text style={[styles.label, { color: labelColor }]}>{label}</Text>
     </View>
   );
 }

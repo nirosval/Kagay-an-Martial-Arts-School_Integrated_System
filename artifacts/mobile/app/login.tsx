@@ -126,7 +126,7 @@ export default function LoginScreen() {
             {mode === "instructor" ? (
               <>
                 <Text style={[styles.cardTitle, { color: colors.foreground }]}>Sign In</Text>
-                <Text style={[styles.cardSub, { color: colors.mutedForeground }]}>Sensei &amp; Senpai access</Text>
+                <Text style={[styles.cardSub, { color: colors.mutedForeground }]}>Sensei, Senpai &amp; Coach access</Text>
 
                 <FieldLabel label="EMAIL" color={colors.mutedForeground} />
                 <TextInput

@@ -20,6 +20,7 @@ import { UserRole } from "@/types";
 const ROLES: Array<{ label: string; desc: string; value: UserRole }> = [
   { label: "Sensei", desc: "Head instructor with full access", value: "sensei" },
   { label: "Senpai", desc: "Senior student / assistant instructor", value: "senpai" },
+  { label: "Coach", desc: "Specialist coach (Boxing, Arnis, etc.)", value: "coach" },
 ];
 
 export default function RegisterInstructorScreen() {
@@ -69,7 +70,7 @@ export default function RegisterInstructorScreen() {
         <Pressable onPress={() => router.back()} style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}>
           <Feather name="arrow-left" size={22} color="#FFF" />
         </Pressable>
-        <Text style={styles.headerTitle}>Instructor Registration</Text>
+        <Text style={styles.headerTitle}>Staff Registration</Text>
         <View style={{ width: 22 }} />
       </View>
 
@@ -87,9 +88,9 @@ export default function RegisterInstructorScreen() {
         <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Account Info</Text>
           <Label label="FULL NAME *" colors={colors} />
-          <TextInput style={[styles.input, iStyle(colors)]} value={name} onChangeText={setName} placeholder="e.g. Sensei Reyes" placeholderTextColor={colors.mutedForeground} />
+          <TextInput style={[styles.input, iStyle(colors)]} value={name} onChangeText={setName} placeholder="e.g. Coach Reyes" placeholderTextColor={colors.mutedForeground} />
           <Label label="EMAIL *" colors={colors} />
-          <TextInput style={[styles.input, iStyle(colors)]} value={email} onChangeText={setEmail} placeholder="instructor@kagayan.com" placeholderTextColor={colors.mutedForeground} autoCapitalize="none" keyboardType="email-address" />
+          <TextInput style={[styles.input, iStyle(colors)]} value={email} onChangeText={setEmail} placeholder="coach@kagayan.com" placeholderTextColor={colors.mutedForeground} autoCapitalize="none" keyboardType="email-address" />
           <Label label="PASSWORD *" colors={colors} />
           <TextInput style={[styles.input, iStyle(colors)]} value={password} onChangeText={setPassword} placeholder="Min. 6 characters" placeholderTextColor={colors.mutedForeground} secureTextEntry />
           <Label label="CONFIRM PASSWORD *" colors={colors} />

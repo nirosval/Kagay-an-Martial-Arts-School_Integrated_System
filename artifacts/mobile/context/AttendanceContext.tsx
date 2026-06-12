@@ -10,8 +10,25 @@ import { AttendanceRecord } from "@/types";
 
 const STORAGE_KEY = "kagayan_attendance";
 const SESSIONS_PER_PROMO = 12;
-// Late threshold: if time-in hour >= LATE_HOUR, mark as "late"
-const LATE_HOUR = 10; // 10:00 AM
+
+// Schedule: Tue & Thu 5pm-8pm, Saturday 1pm-4pm
+// Late = arrived after session start time
+function computeStatus(timeInIso: string): AttendanceRecord["status"] {
+  const d = new Date(timeInIso);
+  const day = d.getDay(); // 0=Sun,1=Mon,2=Tue,3=Wed,4=Thu,5=Fri,6=Sat
+  const totalMins = d.getHours() * 60 + d.getMinutes();
+
+  if (day === 2 || day === 4) {
+    // Tuesday / Thursday: session starts 5:00 PM (300 mins past noon = 17*60)
+    return totalMins > 17 * 60 ? "late" : "present";
+  }
+  if (day === 6) {
+    // Saturday: session starts 1:00 PM
+    return totalMins > 13 * 60 ? "late" : "present";
+  }
+  // Non-training days: mark as present
+  return "present";
+}
 
 interface AttendanceContextType {
   records: AttendanceRecord[];
@@ -29,11 +46,6 @@ const AttendanceContext = createContext<AttendanceContextType | undefined>(undef
 
 function todayStr(): string {
   return new Date().toISOString().split("T")[0];
-}
-
-function computeStatus(timeInIso: string): AttendanceRecord["status"] {
-  const h = new Date(timeInIso).getHours();
-  return h >= LATE_HOUR ? "late" : "present";
 }
 
 export function AttendanceProvider({ children }: { children: React.ReactNode }) {

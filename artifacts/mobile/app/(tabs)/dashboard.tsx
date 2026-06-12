@@ -112,7 +112,7 @@ export default function DashboardScreen() {
       <View style={[styles.header, { backgroundColor: colors.navBar, paddingTop: topPadding + 16 }]}>
         <Text style={styles.headerTitle}>Dashboard</Text>
         <Text style={styles.headerSub}>
-          {user?.role === "sensei" ? "Sensei" : "Senpai"} {user?.name?.split(" ")[1] ?? ""}
+          {user?.role === "sensei" ? "Sensei" : user?.role === "coach" ? "Coach" : "Senpai"} {user?.name?.split(" ")[1] ?? ""}
         </Text>
       </View>
 

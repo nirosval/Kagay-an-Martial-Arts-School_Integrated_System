@@ -189,19 +189,22 @@ export default function PlayerPortalScreen() {
               <Text style={styles.avatarText}>{player.name.split(" ").map((n) => n[0]).slice(0, 2).join("").toUpperCase()}</Text>
             </View>
             <View style={styles.heroInfo}>
+              {isOwner && (
+                <Text style={styles.welcomeText}>Welcome, {player.name.split(" ")[0]}!</Text>
+              )}
               <Text style={styles.heroName}>{player.name}</Text>
               <BeltBadge rank={player.belt_rank} />
               <View style={{ marginTop: 4 }}><StatusBadge status={player.membership_status} /></View>
             </View>
           </View>
           <View style={[styles.statsStrip, { backgroundColor: "rgba(255,255,255,0.06)" }]}>
-            <StatBlock label="Age" value={String(player.age)} unit=" yrs" />
+            <StatBlock label="Age" value={String(player.age)} unit=" yrs" textColor="#FFFFFF" subColor="#93C5FD" />
             <View style={[styles.stripDiv, { backgroundColor: "rgba(255,255,255,0.15)" }]} />
-            <StatBlock label="Height" value={String(player.height_cm)} unit=" cm" />
+            <StatBlock label="Height" value={String(player.height_cm)} unit=" cm" textColor="#FFFFFF" subColor="#93C5FD" />
             <View style={[styles.stripDiv, { backgroundColor: "rgba(255,255,255,0.15)" }]} />
-            <StatBlock label="Weight" value={String(player.weight_kg)} unit=" kg" />
+            <StatBlock label="Weight" value={String(player.weight_kg)} unit=" kg" textColor="#FFFFFF" subColor="#93C5FD" />
             <View style={[styles.stripDiv, { backgroundColor: "rgba(255,255,255,0.15)" }]} />
-            <StatBlock label="Years" value={String(yearsActive)} unit=" yr" />
+            <StatBlock label="Years" value={String(yearsActive)} unit=" yr" textColor="#FFFFFF" subColor="#93C5FD" />
           </View>
 
           {isOwner && (
@@ -485,6 +488,7 @@ const styles = StyleSheet.create({
   avatar: { width: 72, height: 72, borderRadius: 36, borderWidth: 3, backgroundColor: "#1F2937", alignItems: "center", justifyContent: "center" },
   avatarText: { color: "#FFF", fontSize: 26, fontFamily: "Inter_700Bold" },
   heroInfo: { flex: 1, gap: 6, paddingTop: 4 },
+  welcomeText: { color: "#93C5FD", fontSize: 12, fontFamily: "Inter_500Medium", letterSpacing: 0.3 },
   heroName: { color: "#FFF", fontSize: 22, fontFamily: "Inter_700Bold", lineHeight: 26 },
   statsStrip: { flexDirection: "row", paddingVertical: 16, paddingHorizontal: 8 },
   stripDiv: { width: 1, marginVertical: 4 },
