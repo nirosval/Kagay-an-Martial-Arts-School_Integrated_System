@@ -1,7 +1,9 @@
 import { Feather } from "@expo/vector-icons";
-import React, { useMemo } from "react";
+import * as Haptics from "expo-haptics";
+import React, { useMemo, useRef, useState, useEffect } from "react";
 import {
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -39,8 +41,29 @@ function formatTime(iso: string) {
   return `${h}:${m} ${ampm}`;
 }
 
+function clockStr(d: Date) {
+  let h = d.getHours();
+  const m = d.getMinutes().toString().padStart(2, "0");
+  const s = d.getSeconds().toString().padStart(2, "0");
+  const ampm = h >= 12 ? "PM" : "AM";
+  h = h % 12 || 12;
+  return `${h}:${m}:${s} ${ampm}`;
+}
+
 function todayLabel() {
   return new Date().toLocaleDateString("en-PH", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+}
+
+function roleLabel(role: string) {
+  if (role === "sensei") return "Sensei";
+  if (role === "coach") return "Coach";
+  return "Senpai";
+}
+
+function roleColor(role: string) {
+  if (role === "sensei") return "#D32F2F";
+  if (role === "coach") return "#1E40AF";
+  return "#7C3AED";
 }
 
 export default function DashboardScreen() {
@@ -48,17 +71,30 @@ export default function DashboardScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const { players } = usePlayers();
-  const { getTodayAll } = useAttendance();
+  const {
+    getTodayAll, getTodayStaffRecord, staffTimeIn, staffTimeOut,
+    getTodayPresentStaff,
+  } = useAttendance();
+
+  const [attLoading, setAttLoading] = useState(false);
+  const [now, setNow] = useState(new Date());
+  const clockRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    clockRef.current = setInterval(() => setNow(new Date()), 1000);
+    return () => { if (clockRef.current) clearInterval(clockRef.current); };
+  }, []);
 
   const todayRecords = getTodayAll();
+  const myStaffRecord = user ? getTodayStaffRecord(user.id) : undefined;
+  const presentStaff = getTodayPresentStaff();
 
   const stats = useMemo(() => {
     const total = players.length;
     const members = players.filter((p) => p.membership_status === "active_member").length;
     const nonMembers = players.filter((p) => p.membership_status === "active_nonmember").length;
-    const inactive = players.filter((p) => p.membership_status === "inactive").length;
     const totalAchievements = players.reduce((acc, p) => acc + p.achievements.length, 0);
-    return { total, members, nonMembers, inactive, totalAchievements };
+    return { total, members, nonMembers, totalAchievements };
   }, [players]);
 
   const attendanceStats = useMemo(() => {
@@ -75,12 +111,7 @@ export default function DashboardScreen() {
       .filter((p) => p.membership_status !== "inactive")
       .map((p) => {
         const rec = todayRecords.find((r) => r.playerId === p.id);
-        return {
-          ...p,
-          todayStatus: rec ? rec.status : "absent" as const,
-          timeIn: rec?.time_in ?? null,
-          timeOut: rec?.time_out ?? null,
-        };
+        return { ...p, todayStatus: rec ? rec.status : "absent" as const, timeIn: rec?.time_in ?? null };
       })
       .sort((a, b) => {
         const order = { present: 0, late: 1, absent: 2 };
@@ -96,15 +127,23 @@ export default function DashboardScreen() {
 
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
 
-  const statusColor = (s: string) => {
-    if (s === "present") return "#10B981";
-    if (s === "late") return "#F59E0B";
-    return "#EF4444";
+  const statusColor = (s: string) => s === "present" ? "#10B981" : s === "late" ? "#F59E0B" : "#EF4444";
+  const statusLabel = (s: string) => s === "present" ? "Present" : s === "late" ? "Late" : "Absent";
+
+  const handleStaffTimeIn = async () => {
+    if (!user) return;
+    setAttLoading(true);
+    await staffTimeIn(user.id, user.name, user.role);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    setAttLoading(false);
   };
-  const statusLabel = (s: string) => {
-    if (s === "present") return "Present";
-    if (s === "late") return "Late";
-    return "Absent";
+
+  const handleStaffTimeOut = async () => {
+    if (!user) return;
+    setAttLoading(true);
+    await staffTimeOut(user.id);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    setAttLoading(false);
   };
 
   return (
@@ -112,7 +151,7 @@ export default function DashboardScreen() {
       <View style={[styles.header, { backgroundColor: colors.navBar, paddingTop: topPadding + 16 }]}>
         <Text style={styles.headerTitle}>Dashboard</Text>
         <Text style={styles.headerSub}>
-          {user?.role === "sensei" ? "Sensei" : user?.role === "coach" ? "Coach" : "Senpai"} {user?.name?.split(" ")[1] ?? ""}
+          {roleLabel(user?.role ?? "")} {user?.name?.split(" ")[1] ?? ""}
         </Text>
       </View>
 
@@ -127,6 +166,89 @@ export default function DashboardScreen() {
           <Text style={[styles.dateText, { color: colors.mutedForeground }]}>{todayLabel()}</Text>
         </View>
 
+        {/* ── Staff Overview / My Time In ── */}
+        <View style={[styles.section, { backgroundColor: colors.navBar, borderColor: "transparent" }]}>
+          <Text style={styles.staffSectionTitle}>Staff Overview</Text>
+          <Text style={styles.staffSectionSub}>{presentStaff.length} staff present today</Text>
+
+          {/* My personal time-in widget */}
+          <View style={[styles.myAttendBox, { backgroundColor: "rgba(255,255,255,0.07)", borderColor: "rgba(255,255,255,0.12)" }]}>
+            <View style={styles.myAttendTop}>
+              <View>
+                <Text style={styles.myAttendName}>{user?.name ?? "You"}</Text>
+                <View style={[styles.myRoleBadge, { backgroundColor: roleColor(user?.role ?? "") + "30" }]}>
+                  <Text style={[styles.myRoleText, { color: roleColor(user?.role ?? "") === "#D32F2F" ? "#F87171" : roleColor(user?.role ?? "") === "#1E40AF" ? "#93C5FD" : "#C4B5FD" }]}>
+                    {roleLabel(user?.role ?? "")}
+                  </Text>
+                </View>
+              </View>
+              <Text style={styles.clockSmall}>{clockStr(now)}</Text>
+            </View>
+
+            {!myStaffRecord ? (
+              <Pressable onPress={handleStaffTimeIn} disabled={attLoading}
+                style={({ pressed }) => [styles.staffTimeBtn, { backgroundColor: "#10B981", opacity: pressed || attLoading ? 0.8 : 1 }]}>
+                <Feather name="clock" size={16} color="#FFF" />
+                <Text style={styles.staffTimeBtnText}>{attLoading ? "Recording..." : "Time IN — Start Session"}</Text>
+              </Pressable>
+            ) : myStaffRecord.time_out === null ? (
+              <View style={{ gap: 8 }}>
+                <View style={styles.checkedInRow}>
+                  <View style={[styles.greenDot, { backgroundColor: "#10B981" }]} />
+                  <Text style={styles.checkedInText}>On duty since {formatTime(myStaffRecord.time_in)}</Text>
+                </View>
+                <Pressable onPress={handleStaffTimeOut} disabled={attLoading}
+                  style={({ pressed }) => [styles.staffTimeBtn, { backgroundColor: "#D32F2F", opacity: pressed || attLoading ? 0.8 : 1 }]}>
+                  <Feather name="clock" size={16} color="#FFF" />
+                  <Text style={styles.staffTimeBtnText}>{attLoading ? "Recording..." : "Time OUT — End Session"}</Text>
+                </Pressable>
+              </View>
+            ) : (
+              <View style={[styles.doneRow, { backgroundColor: "rgba(255,255,255,0.06)" }]}>
+                <Feather name="check-circle" size={15} color="#10B981" />
+                <Text style={styles.doneText}>
+                  Session complete · {formatTime(myStaffRecord.time_in)} – {formatTime(myStaffRecord.time_out)}
+                </Text>
+              </View>
+            )}
+          </View>
+
+          {/* All present staff today */}
+          {presentStaff.length > 0 && (
+            <View style={[styles.staffListBox, { backgroundColor: "rgba(255,255,255,0.05)", borderColor: "rgba(255,255,255,0.1)" }]}>
+              <Text style={styles.staffListTitle}>Present Staff Today</Text>
+              {presentStaff.map((s, i) => (
+                <View key={s.id}>
+                  {i > 0 && <View style={[styles.staffRowSep, { backgroundColor: "rgba(255,255,255,0.08)" }]} />}
+                  <View style={styles.staffRow}>
+                    <View style={[styles.staffAvatar, { backgroundColor: roleColor(s.staffRole) + "30" }]}>
+                      <Text style={[styles.staffAvatarText, { color: "#FFF" }]}>
+                        {s.staffName.split(" ").map((n: string) => n[0]).slice(0, 2).join("").toUpperCase()}
+                      </Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.staffName}>{s.staffName}</Text>
+                      <Text style={[styles.staffRole, { color: roleColor(s.staffRole) === "#D32F2F" ? "#F87171" : roleColor(s.staffRole) === "#1E40AF" ? "#93C5FD" : "#C4B5FD" }]}>
+                        {roleLabel(s.staffRole)}
+                      </Text>
+                    </View>
+                    <View style={{ alignItems: "flex-end" }}>
+                      <Text style={styles.staffTimeText}>IN {formatTime(s.time_in)}</Text>
+                      {s.time_out ? (
+                        <Text style={styles.staffTimeOut}>OUT {formatTime(s.time_out)}</Text>
+                      ) : (
+                        <View style={styles.onDutyPill}>
+                          <Text style={styles.onDutyText}>On duty</Text>
+                        </View>
+                      )}
+                    </View>
+                  </View>
+                </View>
+              ))}
+            </View>
+          )}
+        </View>
+
         {/* Player Stats */}
         <View style={styles.statsGrid}>
           <StatCard label="Total Athletes" value={stats.total} icon="users" accent={colors.primary} />
@@ -135,12 +257,10 @@ export default function DashboardScreen() {
           <StatCard label="Achievements" value={stats.totalAchievements} icon="award" accent={colors.accent} />
         </View>
 
-        {/* Status Overview */}
+        {/* Player Attendance Status Overview */}
         <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Today's Attendance Status</Text>
-          <Text style={[styles.sectionSub, { color: colors.mutedForeground }]}>
-            {attendanceStats.total} active players tracked
-          </Text>
+          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Today's Player Attendance</Text>
+          <Text style={[styles.sectionSub, { color: colors.mutedForeground }]}>{attendanceStats.total} active players tracked</Text>
 
           <View style={styles.statusRow}>
             <StatusPill label="Present" count={attendanceStats.present} color="#10B981" colors={colors} />
@@ -148,21 +268,14 @@ export default function DashboardScreen() {
             <StatusPill label="Late" count={attendanceStats.late} color="#F59E0B" colors={colors} />
           </View>
 
-          {/* Progress bar */}
           {attendanceStats.total > 0 && (
             <View style={{ gap: 4 }}>
               <View style={[styles.progressTrack, { backgroundColor: colors.border }]}>
                 {attendanceStats.present > 0 && (
-                  <View style={[styles.progressFill, {
-                    backgroundColor: "#10B981",
-                    width: `${Math.round((attendanceStats.present / attendanceStats.total) * 100)}%`,
-                  }]} />
+                  <View style={[styles.progressFill, { backgroundColor: "#10B981", width: `${Math.round((attendanceStats.present / attendanceStats.total) * 100)}%` }]} />
                 )}
                 {attendanceStats.late > 0 && (
-                  <View style={[styles.progressFill, {
-                    backgroundColor: "#F59E0B",
-                    width: `${Math.round((attendanceStats.late / attendanceStats.total) * 100)}%`,
-                  }]} />
+                  <View style={[styles.progressFill, { backgroundColor: "#F59E0B", width: `${Math.round((attendanceStats.late / attendanceStats.total) * 100)}%` }]} />
                 )}
               </View>
               <Text style={[styles.progressLabel, { color: colors.mutedForeground }]}>
@@ -175,7 +288,6 @@ export default function DashboardScreen() {
         {/* Player List Overview */}
         <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Player List Overview</Text>
-
           {playerListToday.length === 0 ? (
             <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>No active players.</Text>
           ) : (
@@ -191,9 +303,7 @@ export default function DashboardScreen() {
                   <View style={styles.tableRow}>
                     <Text style={[styles.tdName, { color: colors.foreground }]} numberOfLines={1}>{p.name}</Text>
                     <View style={[styles.statusBadge, { backgroundColor: statusColor(p.todayStatus) + "18" }]}>
-                      <Text style={[styles.statusBadgeText, { color: statusColor(p.todayStatus) }]}>
-                        {statusLabel(p.todayStatus)}
-                      </Text>
+                      <Text style={[styles.statusBadgeText, { color: statusColor(p.todayStatus) }]}>{statusLabel(p.todayStatus)}</Text>
                     </View>
                     <Text style={[styles.tdTime, { color: colors.mutedForeground }]}>
                       {p.timeIn ? formatTime(p.timeIn) : "—"}
@@ -273,6 +383,36 @@ const styles = StyleSheet.create({
   content: { padding: 16, gap: 16 },
   dateRow: { flexDirection: "row", alignItems: "center", gap: 8, borderRadius: 10, borderWidth: 1, padding: 12 },
   dateText: { fontSize: 13, fontFamily: "Inter_500Medium" },
+
+  // Staff overview
+  staffSectionTitle: { color: "#FFFFFF", fontSize: 17, fontFamily: "Inter_700Bold" },
+  staffSectionSub: { color: "#9CA3AF", fontSize: 12, fontFamily: "Inter_400Regular", marginTop: -4 },
+  myAttendBox: { borderRadius: 12, borderWidth: 1, padding: 14, gap: 12 },
+  myAttendTop: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between" },
+  myAttendName: { color: "#FFF", fontSize: 15, fontFamily: "Inter_600SemiBold" },
+  myRoleBadge: { alignSelf: "flex-start", borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, marginTop: 4 },
+  myRoleText: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
+  clockSmall: { color: "#9CA3AF", fontSize: 13, fontFamily: "Inter_400Regular", paddingTop: 2 },
+  staffTimeBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderRadius: 10, paddingVertical: 12 },
+  staffTimeBtnText: { color: "#FFF", fontSize: 14, fontFamily: "Inter_700Bold", letterSpacing: 0.5 },
+  checkedInRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  greenDot: { width: 8, height: 8, borderRadius: 4 },
+  checkedInText: { color: "#D1FAE5", fontSize: 13, fontFamily: "Inter_500Medium" },
+  doneRow: { flexDirection: "row", alignItems: "center", gap: 8, borderRadius: 8, padding: 10 },
+  doneText: { color: "#D1FAE5", fontSize: 12, fontFamily: "Inter_500Medium", flex: 1 },
+  staffListBox: { borderRadius: 12, borderWidth: 1, padding: 14, gap: 0 },
+  staffListTitle: { color: "#9CA3AF", fontSize: 11, fontFamily: "Inter_600SemiBold", letterSpacing: 0.8, marginBottom: 10 },
+  staffRowSep: { height: 1, marginVertical: 2 },
+  staffRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 8 },
+  staffAvatar: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
+  staffAvatarText: { fontSize: 13, fontFamily: "Inter_700Bold" },
+  staffName: { color: "#FFF", fontSize: 13, fontFamily: "Inter_600SemiBold" },
+  staffRole: { fontSize: 11, fontFamily: "Inter_500Medium", marginTop: 1 },
+  staffTimeText: { color: "#9CA3AF", fontSize: 12, fontFamily: "Inter_400Regular" },
+  staffTimeOut: { color: "#6B7280", fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 2 },
+  onDutyPill: { backgroundColor: "#10B98120", borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2, marginTop: 2 },
+  onDutyText: { color: "#10B981", fontSize: 10, fontFamily: "Inter_600SemiBold" },
+
   statsGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
   statCard: { width: "47%", borderRadius: 12, borderWidth: 1, padding: 16, gap: 8, elevation: 1 },
   statIcon: { width: 36, height: 36, borderRadius: 10, alignItems: "center", justifyContent: "center" },

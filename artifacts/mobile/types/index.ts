@@ -64,3 +64,13 @@ export interface AttendanceRecord {
   time_out: string | null;
   status: AttendanceStatus;
 }
+
+export interface StaffAttendanceRecord {
+  id: string;
+  staffId: string;
+  staffName: string;
+  staffRole: UserRole;
+  date: string;         // YYYY-MM-DD
+  time_in: string;      // ISO timestamp
+  time_out: string | null;
+}
