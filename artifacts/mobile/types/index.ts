@@ -5,6 +5,7 @@ export interface AdminUser {
   email: string;
   name: string;
   role: UserRole;
+  photo_url?: string;
 }
 
 export interface AdminAccount extends AdminUser {
@@ -70,6 +71,7 @@ export interface StaffAttendanceRecord {
   staffId: string;
   staffName: string;
   staffRole: UserRole;
+  staffPhotoUrl?: string;
   date: string;         // YYYY-MM-DD
   time_in: string;      // ISO timestamp
   time_out: string | null;

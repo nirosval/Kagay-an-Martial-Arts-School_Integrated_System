@@ -1,7 +1,9 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import * as ImagePicker from "expo-image-picker";
 import React, { useMemo, useRef, useState, useEffect } from "react";
 import {
+  Image,
   Platform,
   Pressable,
   ScrollView,
@@ -69,7 +71,7 @@ function roleColor(role: string) {
 export default function DashboardScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { user } = useAuth();
+  const { user, updateProfilePhoto } = useAuth();
   const { players } = usePlayers();
   const {
     getTodayAll, getTodayStaffRecord, staffTimeIn, staffTimeOut,
@@ -130,10 +132,25 @@ export default function DashboardScreen() {
   const statusColor = (s: string) => s === "present" ? "#10B981" : s === "late" ? "#F59E0B" : "#EF4444";
   const statusLabel = (s: string) => s === "present" ? "Present" : s === "late" ? "Late" : "Absent";
 
+  const handlePickStaffPhoto = async () => {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) return;
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.5,
+    });
+    if (!result.canceled && result.assets[0]) {
+      await updateProfilePhoto(result.assets[0].uri);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
+  };
+
   const handleStaffTimeIn = async () => {
     if (!user) return;
     setAttLoading(true);
-    await staffTimeIn(user.id, user.name, user.role);
+    await staffTimeIn(user.id, user.name, user.role, user.photo_url);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setAttLoading(false);
   };
@@ -174,12 +191,26 @@ export default function DashboardScreen() {
           {/* My personal time-in widget */}
           <View style={[styles.myAttendBox, { backgroundColor: "rgba(255,255,255,0.07)", borderColor: "rgba(255,255,255,0.12)" }]}>
             <View style={styles.myAttendTop}>
-              <View>
-                <Text style={styles.myAttendName}>{user?.name ?? "You"}</Text>
-                <View style={[styles.myRoleBadge, { backgroundColor: roleColor(user?.role ?? "") + "30" }]}>
-                  <Text style={[styles.myRoleText, { color: roleColor(user?.role ?? "") === "#D32F2F" ? "#F87171" : roleColor(user?.role ?? "") === "#1E40AF" ? "#93C5FD" : "#C4B5FD" }]}>
-                    {roleLabel(user?.role ?? "")}
-                  </Text>
+              <View style={styles.myAttendLeft}>
+                <Pressable onPress={handlePickStaffPhoto} style={styles.myAvatarWrap}>
+                  {user?.photo_url ? (
+                    <Image source={{ uri: user.photo_url }} style={styles.myAvatarImg} />
+                  ) : (
+                    <Text style={styles.myAvatarText}>
+                      {user?.name.split(" ").map((n) => n[0]).slice(0, 2).join("").toUpperCase() ?? "?"}
+                    </Text>
+                  )}
+                  <View style={styles.myAvatarCamera}>
+                    <Feather name="camera" size={9} color="#FFF" />
+                  </View>
+                </Pressable>
+                <View>
+                  <Text style={styles.myAttendName}>{user?.name ?? "You"}</Text>
+                  <View style={[styles.myRoleBadge, { backgroundColor: roleColor(user?.role ?? "") + "30" }]}>
+                    <Text style={[styles.myRoleText, { color: roleColor(user?.role ?? "") === "#D32F2F" ? "#F87171" : roleColor(user?.role ?? "") === "#1E40AF" ? "#93C5FD" : "#C4B5FD" }]}>
+                      {roleLabel(user?.role ?? "")}
+                    </Text>
+                  </View>
                 </View>
               </View>
               <Text style={styles.clockSmall}>{clockStr(now)}</Text>
@@ -222,9 +253,13 @@ export default function DashboardScreen() {
                   {i > 0 && <View style={[styles.staffRowSep, { backgroundColor: "rgba(255,255,255,0.08)" }]} />}
                   <View style={styles.staffRow}>
                     <View style={[styles.staffAvatar, { backgroundColor: roleColor(s.staffRole) + "30" }]}>
-                      <Text style={[styles.staffAvatarText, { color: "#FFF" }]}>
-                        {s.staffName.split(" ").map((n: string) => n[0]).slice(0, 2).join("").toUpperCase()}
-                      </Text>
+                      {s.staffPhotoUrl ? (
+                        <Image source={{ uri: s.staffPhotoUrl }} style={styles.staffAvatarImg} />
+                      ) : (
+                        <Text style={[styles.staffAvatarText, { color: "#FFF" }]}>
+                          {s.staffName.split(" ").map((n: string) => n[0]).slice(0, 2).join("").toUpperCase()}
+                        </Text>
+                      )}
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.staffName}>{s.staffName}</Text>
@@ -389,6 +424,11 @@ const styles = StyleSheet.create({
   staffSectionSub: { color: "#9CA3AF", fontSize: 12, fontFamily: "Inter_400Regular", marginTop: -4 },
   myAttendBox: { borderRadius: 12, borderWidth: 1, padding: 14, gap: 12 },
   myAttendTop: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between" },
+  myAttendLeft: { flexDirection: "row", alignItems: "center", gap: 10 },
+  myAvatarWrap: { width: 44, height: 44, borderRadius: 22, backgroundColor: "#374151", alignItems: "center", justifyContent: "center", overflow: "hidden" },
+  myAvatarImg: { width: 44, height: 44, borderRadius: 22 },
+  myAvatarText: { color: "#FFF", fontSize: 16, fontFamily: "Inter_700Bold" },
+  myAvatarCamera: { position: "absolute", bottom: 0, right: 0, width: 16, height: 16, borderRadius: 8, backgroundColor: "#111827", alignItems: "center", justifyContent: "center" },
   myAttendName: { color: "#FFF", fontSize: 15, fontFamily: "Inter_600SemiBold" },
   myRoleBadge: { alignSelf: "flex-start", borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, marginTop: 4 },
   myRoleText: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
@@ -404,7 +444,8 @@ const styles = StyleSheet.create({
   staffListTitle: { color: "#9CA3AF", fontSize: 11, fontFamily: "Inter_600SemiBold", letterSpacing: 0.8, marginBottom: 10 },
   staffRowSep: { height: 1, marginVertical: 2 },
   staffRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 8 },
-  staffAvatar: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
+  staffAvatar: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center", overflow: "hidden" },
+  staffAvatarImg: { width: 36, height: 36, borderRadius: 18 },
   staffAvatarText: { fontSize: 13, fontFamily: "Inter_700Bold" },
   staffName: { color: "#FFF", fontSize: 13, fontFamily: "Inter_600SemiBold" },
   staffRole: { fontSize: 11, fontFamily: "Inter_500Medium", marginTop: 1 },

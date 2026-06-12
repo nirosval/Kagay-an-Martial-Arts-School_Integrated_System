@@ -1,9 +1,11 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import * as ImagePicker from "expo-image-picker";
 import { router, useLocalSearchParams } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import {
   Alert,
+  Image,
   Platform,
   Pressable,
   ScrollView,
@@ -155,6 +157,24 @@ export default function PlayerPortalScreen() {
     setAttLoading(false);
   };
 
+  const handlePickPhoto = async () => {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert("Permission needed", "Allow access to your photos to set a profile picture.");
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.5,
+    });
+    if (!result.canceled && result.assets[0]) {
+      await updatePlayer(player.id, { photo_url: result.assets[0].uri });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
+  };
+
   const handleLogout = async () => {
     await playerLogout();
     router.replace("/login");
@@ -185,14 +205,24 @@ export default function PlayerPortalScreen() {
             )}
           </View>
           <View style={styles.heroBody}>
-            <View style={[styles.avatar, { borderColor: colors.primary }]}>
-              <Text style={styles.avatarText}>{player.name.split(" ").map((n) => n[0]).slice(0, 2).join("").toUpperCase()}</Text>
-            </View>
-            <View style={styles.heroInfo}>
-              {isOwner && (
-                <Text style={styles.welcomeText}>Welcome, {player.name.split(" ")[0]}!</Text>
+            <Pressable onPress={isOwner ? handlePickPhoto : undefined} style={[styles.avatarWrap, { borderColor: colors.primary }]}>
+              {player.photo_url ? (
+                <Image source={{ uri: player.photo_url }} style={styles.avatarImg} />
+              ) : (
+                <Text style={styles.avatarText}>{player.name.split(" ").map((n) => n[0]).slice(0, 2).join("").toUpperCase()}</Text>
               )}
-              <Text style={styles.heroName}>{player.name}</Text>
+              {isOwner && (
+                <View style={styles.cameraOverlay}>
+                  <Feather name="camera" size={11} color="#FFF" />
+                </View>
+              )}
+            </Pressable>
+            <View style={styles.heroInfo}>
+              {isOwner ? (
+                <Text style={styles.welcomeName}>Welcome, {player.name.split(" ")[0]}!</Text>
+              ) : (
+                <Text style={styles.heroName}>{player.name}</Text>
+              )}
               <BeltBadge rank={player.belt_rank} />
               <View style={{ marginTop: 4 }}><StatusBadge status={player.membership_status} /></View>
             </View>
@@ -485,10 +515,12 @@ const styles = StyleSheet.create({
   backBtn: { flexDirection: "row", alignItems: "center", gap: 6 },
   backLabel: { color: "#FFF", fontSize: 15, fontFamily: "Inter_500Medium" },
   heroBody: { flexDirection: "row", alignItems: "flex-start", gap: 16, paddingHorizontal: 20, paddingBottom: 16 },
-  avatar: { width: 72, height: 72, borderRadius: 36, borderWidth: 3, backgroundColor: "#1F2937", alignItems: "center", justifyContent: "center" },
   avatarText: { color: "#FFF", fontSize: 26, fontFamily: "Inter_700Bold" },
   heroInfo: { flex: 1, gap: 6, paddingTop: 4 },
-  welcomeText: { color: "#93C5FD", fontSize: 12, fontFamily: "Inter_500Medium", letterSpacing: 0.3 },
+  avatarWrap: { width: 72, height: 72, borderRadius: 36, borderWidth: 3, backgroundColor: "#1F2937", alignItems: "center", justifyContent: "center", overflow: "hidden" },
+  avatarImg: { width: 72, height: 72, borderRadius: 36 },
+  cameraOverlay: { position: "absolute", bottom: 0, right: 0, width: 22, height: 22, borderRadius: 11, backgroundColor: "#111827", alignItems: "center", justifyContent: "center", borderWidth: 1.5, borderColor: "#374151" },
+  welcomeName: { color: "#93C5FD", fontSize: 20, fontFamily: "Inter_700Bold", lineHeight: 24 },
   heroName: { color: "#FFF", fontSize: 22, fontFamily: "Inter_700Bold", lineHeight: 26 },
   statsStrip: { flexDirection: "row", paddingVertical: 16, paddingHorizontal: 8 },
   stripDiv: { width: 1, marginVertical: 4 },

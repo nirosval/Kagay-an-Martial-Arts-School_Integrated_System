@@ -14,6 +14,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<boolean>;
   logout: () => Promise<void>;
   register: (name: string, email: string, password: string, role: UserRole) => Promise<{ success: boolean; error?: string }>;
+  updateProfilePhoto: (photoUri: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -91,8 +92,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     []
   );
 
+  const updateProfilePhoto = useCallback(async (photoUri: string): Promise<void> => {
+    if (!user) return;
+    const stored = await AsyncStorage.getItem(ACCOUNTS_KEY);
+    const list: AdminAccount[] = stored ? JSON.parse(stored) : DEFAULT_ACCOUNTS;
+    const updated = list.map((a) => a.id === user.id ? { ...a, photo_url: photoUri } : a);
+    await AsyncStorage.setItem(ACCOUNTS_KEY, JSON.stringify(updated));
+    setAccounts(updated);
+    const updatedUser: AdminUser = { ...user, photo_url: photoUri };
+    setUser(updatedUser);
+    await AsyncStorage.setItem("kagayan_user", JSON.stringify(updatedUser));
+  }, [user]);
+
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, logout, register }}>
+    <AuthContext.Provider value={{ user, isLoading, login, logout, register, updateProfilePhoto }}>
       {children}
     </AuthContext.Provider>
   );

@@ -43,7 +43,7 @@ interface AttendanceContextType {
   getTodayAll: () => AttendanceRecord[];
   // Staff attendance
   staffRecords: StaffAttendanceRecord[];
-  staffTimeIn: (staffId: string, staffName: string, staffRole: UserRole) => Promise<void>;
+  staffTimeIn: (staffId: string, staffName: string, staffRole: UserRole, staffPhotoUrl?: string) => Promise<void>;
   staffTimeOut: (staffId: string) => Promise<void>;
   getTodayStaffRecord: (staffId: string) => StaffAttendanceRecord | undefined;
   getTodayPresentStaff: () => StaffAttendanceRecord[];
@@ -139,13 +139,14 @@ export function AttendanceProvider({ children }: { children: React.ReactNode }) 
   );
 
   // ── Staff attendance ───────────────────────────────────────
-  const staffTimeIn = useCallback(async (staffId: string, staffName: string, staffRole: UserRole): Promise<void> => {
+  const staffTimeIn = useCallback(async (staffId: string, staffName: string, staffRole: UserRole, staffPhotoUrl?: string): Promise<void> => {
     const now = new Date().toISOString();
     const newRecord: StaffAttendanceRecord = {
       id: Date.now().toString() + Math.random().toString(36).substr(2, 6),
       staffId,
       staffName,
       staffRole,
+      staffPhotoUrl,
       date: todayStr(),
       time_in: now,
       time_out: null,
