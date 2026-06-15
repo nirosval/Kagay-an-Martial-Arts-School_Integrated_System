@@ -16,6 +16,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { AttendanceProvider } from "@/context/AttendanceContext";
+import { AnnouncementsProvider } from "@/context/AnnouncementsContext";
 import { PlayerAuthProvider } from "@/context/PlayerAuthContext";
 import { PlayersProvider } from "@/context/PlayersContext";
 
@@ -74,13 +75,15 @@ export default function RootLayout() {
           <GestureHandlerRootView style={{ flex: 1 }}>
             <KeyboardProvider>
               <AuthProvider>
-                <PlayersProvider>
-                  <AttendanceProvider>
-                    <PlayerAuthProvider>
-                      <RootLayoutNav />
-                    </PlayerAuthProvider>
-                  </AttendanceProvider>
-                </PlayersProvider>
+                <AnnouncementsProvider>
+                  <PlayersProvider>
+                    <AttendanceProvider>
+                      <PlayerAuthProvider>
+                        <RootLayoutNav />
+                      </PlayerAuthProvider>
+                    </AttendanceProvider>
+                  </PlayersProvider>
+                </AnnouncementsProvider>
               </AuthProvider>
             </KeyboardProvider>
           </GestureHandlerRootView>

@@ -6,10 +6,25 @@ export interface AdminUser {
   name: string;
   role: UserRole;
   photo_url?: string;
+  birthdate?: string; // YYYY-MM-DD
 }
 
 export interface AdminAccount extends AdminUser {
   password: string;
+}
+
+export type AnnouncementCategory = "tournament" | "belt_promotion" | "general";
+
+export interface Announcement {
+  id: string;
+  category: AnnouncementCategory;
+  title: string;
+  body: string;
+  venue?: string;
+  eventDate?: string; // YYYY-MM-DD
+  createdBy: string;
+  createdByRole: UserRole;
+  createdAt: string; // ISO
 }
 
 export type MembershipStatus = "active_member" | "active_nonmember" | "inactive";
