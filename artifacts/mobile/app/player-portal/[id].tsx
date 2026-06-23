@@ -18,6 +18,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BeltBadge } from "@/components/BeltBadge";
 import { StatBlock } from "@/components/StatBlock";
 import { StatusBadge } from "@/components/StatusBadge";
+import { useAnnouncements } from "@/context/AnnouncementsContext";
 import { useAttendance } from "@/context/AttendanceContext";
 import { usePlayerAuth } from "@/context/PlayerAuthContext";
 import { usePlayers } from "@/context/PlayersContext";
@@ -35,7 +36,12 @@ const MEMBERSHIP_OPTIONS: Array<{ label: string; value: MembershipStatus }> = [
 ];
 const SESSIONS_PER_PROMO = 12;
 
-type Tab = "profile" | "edit" | "achievements" | "attendance";
+type Tab = "profile" | "edit" | "achievements" | "attendance" | "news";
+
+function todayMMDD(): string {
+  const d = new Date();
+  return `${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
 
 function formatTime(iso: string) {
   const d = new Date(iso);
@@ -67,9 +73,11 @@ export default function PlayerPortalScreen() {
   const { getPlayer, updatePlayer, addAchievement, deleteAchievement } = usePlayers();
   const { playerAccount, playerLogout } = usePlayerAuth();
   const { timeIn, timeOut, getTodayRecord, getPlayerRecords, getPromoProgress } = useAttendance();
+  const { announcements } = useAnnouncements();
 
   const player = getPlayer(id ?? "");
   const isOwner = playerAccount?.playerId === id;
+  const isPlayerBirthday = player?.birthdate ? player.birthdate.slice(5) === todayMMDD() : false;
   const [tab, setTab] = useState<Tab>("profile");
 
   // Live clock
@@ -185,6 +193,7 @@ export default function PlayerPortalScreen() {
     { key: "edit", label: "Edit Info" },
     { key: "achievements", label: "Awards" },
     { key: "attendance", label: "Attendance" },
+    { key: "news", label: "News" },
   ];
 
   return (
@@ -249,6 +258,17 @@ export default function PlayerPortalScreen() {
         </View>
 
         <View style={styles.body}>
+
+          {/* ── BIRTHDAY BANNER ── */}
+          {isOwner && isPlayerBirthday && (
+            <View style={[styles.bdBanner, { backgroundColor: "#FEF3C7", borderColor: "#F59E0B" }]}>
+              <Text style={styles.bdCake}>🎂</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.bdTitle}>Happy Birthday, {player.name.split(" ")[0]}!</Text>
+                <Text style={styles.bdSub}>The Kagay-an dojo family celebrates with you! 🎉</Text>
+              </View>
+            </View>
+          )}
 
           {/* ── PROFILE ── */}
           {(tab === "profile" || !isOwner) && (
@@ -368,7 +388,55 @@ export default function PlayerPortalScreen() {
             </View>
           )}
 
-          {/* ── ATTENDANCE ── */}
+          {/* ── NEWS ── */}
+          {tab === "news" && (
+            <View style={{ gap: 12 }}>
+              {announcements.length === 0 ? (
+                <View style={[styles.emptyAch, { paddingVertical: 40 }]}>
+                  <Feather name="bell-off" size={32} color={colors.mutedForeground} />
+                  <Text style={[styles.emptyAchText, { color: colors.mutedForeground }]}>No announcements yet. Check back soon!</Text>
+                </View>
+              ) : (
+                announcements.map((ann) => {
+                  const catColor = ann.category === "tournament" ? "#D32F2F" : ann.category === "belt_promotion" ? "#F59E0B" : "#1E40AF";
+                  const catLabel = ann.category === "tournament" ? "Tournament" : ann.category === "belt_promotion" ? "Belt Promotion" : "General";
+                  const catIcon: React.ComponentProps<typeof Feather>["name"] = ann.category === "tournament" ? "award" : ann.category === "belt_promotion" ? "star" : "bell";
+                  return (
+                    <View key={ann.id} style={[styles.newsCard, { backgroundColor: colors.card, borderColor: colors.border, borderLeftColor: catColor }]}>
+                      <View style={[styles.newsBadge, { backgroundColor: catColor + "20" }]}>
+                        <Feather name={catIcon} size={11} color={catColor} />
+                        <Text style={[styles.newsBadgeText, { color: catColor }]}>{catLabel}</Text>
+                      </View>
+                      <Text style={[styles.newsTitle, { color: colors.foreground }]}>{ann.title}</Text>
+                      <Text style={[styles.newsBody, { color: colors.mutedForeground }]}>{ann.body}</Text>
+                      {(ann.venue || ann.eventDate) && (
+                        <View style={[styles.newsMeta, { borderTopColor: colors.border }]}>
+                          {ann.venue && (
+                            <View style={styles.newsMetaRow}>
+                              <Feather name="map-pin" size={11} color={colors.mutedForeground} />
+                              <Text style={[styles.newsMetaText, { color: colors.mutedForeground }]}>{ann.venue}</Text>
+                            </View>
+                          )}
+                          {ann.eventDate && (
+                            <View style={styles.newsMetaRow}>
+                              <Feather name="calendar" size={11} color={colors.mutedForeground} />
+                              <Text style={[styles.newsMetaText, { color: colors.mutedForeground }]}>
+                                {new Date(ann.eventDate + "T00:00:00").toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
+                              </Text>
+                            </View>
+                          )}
+                        </View>
+                      )}
+                      <Text style={[styles.newsFooter, { color: colors.mutedForeground }]}>
+                        Posted by {ann.createdBy} · {new Date(ann.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                      </Text>
+                    </View>
+                  );
+                })
+              )}
+            </View>
+          )}
+
           {tab === "attendance" && isOwner && (
             <>
               {/* Clock card */}
@@ -583,6 +651,19 @@ const styles = StyleSheet.create({
   promoBubbleLabel: { fontSize: 10, fontFamily: "Inter_500Medium" },
   renewalBanner: { flexDirection: "row", alignItems: "flex-start", gap: 8, borderRadius: 8, borderWidth: 1, padding: 10 },
   renewalText: { flex: 1, color: "#92400E", fontSize: 12, fontFamily: "Inter_500Medium", lineHeight: 18 },
+  bdBanner: { flexDirection: "row", alignItems: "center", gap: 12, borderWidth: 1.5, borderRadius: 14, padding: 14, marginBottom: 4 },
+  bdCake: { fontSize: 28 },
+  bdTitle: { color: "#92400E", fontSize: 15, fontFamily: "Inter_700Bold" },
+  bdSub: { color: "#78350F", fontSize: 12, fontFamily: "Inter_500Medium", marginTop: 2 },
+  newsCard: { borderRadius: 14, borderWidth: 1, borderLeftWidth: 4, padding: 12, gap: 6 },
+  newsBadge: { flexDirection: "row", alignItems: "center", gap: 5, alignSelf: "flex-start", borderRadius: 20, paddingHorizontal: 9, paddingVertical: 3 },
+  newsBadgeText: { fontSize: 10, fontFamily: "Inter_600SemiBold" },
+  newsTitle: { fontSize: 14, fontFamily: "Inter_700Bold" },
+  newsBody: { fontSize: 12, fontFamily: "Inter_400Regular", lineHeight: 18 },
+  newsMeta: { borderTopWidth: 1, paddingTop: 8, gap: 4 },
+  newsMetaRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  newsMetaText: { fontSize: 11, fontFamily: "Inter_500Medium" },
+  newsFooter: { fontSize: 10, fontFamily: "Inter_400Regular" },
   recRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 8 },
   recDot: { width: 8, height: 8, borderRadius: 4 },
   recDate: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
