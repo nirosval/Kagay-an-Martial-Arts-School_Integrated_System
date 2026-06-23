@@ -62,11 +62,12 @@ export function AttendanceProvider({ children }: { children: React.ReactNode }) 
 
   useEffect(() => {
     Promise.all([
-      AsyncStorage.getItem(STORAGE_KEY),
-      AsyncStorage.getItem(STAFF_STORAGE_KEY),
+      AsyncStorage.getItem(STORAGE_KEY).catch(() => null),
+      AsyncStorage.getItem(STAFF_STORAGE_KEY).catch(() => null),
     ]).then(([stored, storedStaff]) => {
       if (stored) { try { setRecords(JSON.parse(stored)); } catch { /* ignore */ } }
       if (storedStaff) { try { setStaffRecords(JSON.parse(storedStaff)); } catch { /* ignore */ } }
+    }).catch(() => { /* storage unavailable */ }).finally(() => {
       setIsLoading(false);
     });
   }, []);

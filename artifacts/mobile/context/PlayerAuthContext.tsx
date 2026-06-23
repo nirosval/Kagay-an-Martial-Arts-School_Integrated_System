@@ -29,8 +29,8 @@ export function PlayerAuthProvider({ children }: { children: React.ReactNode }) 
 
   useEffect(() => {
     Promise.all([
-      AsyncStorage.getItem(SESSION_KEY),
-      AsyncStorage.getItem(ACCOUNTS_KEY),
+      AsyncStorage.getItem(SESSION_KEY).catch(() => null),
+      AsyncStorage.getItem(ACCOUNTS_KEY).catch(() => null),
     ]).then(([session, accounts]) => {
       if (session) {
         try { setPlayerAccount(JSON.parse(session)); } catch { /* ignore */ }
@@ -38,6 +38,7 @@ export function PlayerAuthProvider({ children }: { children: React.ReactNode }) 
       if (accounts) {
         try { setPlayerAccounts(JSON.parse(accounts)); } catch { /* ignore */ }
       }
+    }).catch(() => { /* storage unavailable */ }).finally(() => {
       setIsLoading(false);
     });
   }, []);

@@ -41,8 +41,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     Promise.all([
-      AsyncStorage.getItem("kagayan_user"),
-      AsyncStorage.getItem(ACCOUNTS_KEY),
+      AsyncStorage.getItem("kagayan_user").catch(() => null),
+      AsyncStorage.getItem(ACCOUNTS_KEY).catch(() => null),
     ]).then(([storedUser, storedAccounts]) => {
       if (storedUser) {
         try { setUser(JSON.parse(storedUser)); } catch { /* ignore */ }
@@ -50,6 +50,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (storedAccounts) {
         try { setAccounts(JSON.parse(storedAccounts)); } catch { /* ignore */ }
       }
+    }).catch(() => { /* storage unavailable */ }).finally(() => {
       setIsLoading(false);
     });
   }, []);

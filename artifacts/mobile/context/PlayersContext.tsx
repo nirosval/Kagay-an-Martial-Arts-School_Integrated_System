@@ -153,12 +153,16 @@ export function PlayersProvider({ children }: { children: React.ReactNode }) {
       }
 
       // Fallback: AsyncStorage
-      const stored = await AsyncStorage.getItem(LOCAL_KEY);
-      if (stored) {
-        try { setPlayers(JSON.parse(stored)); } catch { setPlayers(SEED_PLAYERS); }
-      } else {
+      try {
+        const stored = await AsyncStorage.getItem(LOCAL_KEY);
+        if (stored) {
+          try { setPlayers(JSON.parse(stored)); } catch { setPlayers(SEED_PLAYERS); }
+        } else {
+          setPlayers(SEED_PLAYERS);
+          try { await AsyncStorage.setItem(LOCAL_KEY, JSON.stringify(SEED_PLAYERS)); } catch { /* ignore */ }
+        }
+      } catch {
         setPlayers(SEED_PLAYERS);
-        await AsyncStorage.setItem(LOCAL_KEY, JSON.stringify(SEED_PLAYERS));
       }
       setIsLoading(false);
     })();
