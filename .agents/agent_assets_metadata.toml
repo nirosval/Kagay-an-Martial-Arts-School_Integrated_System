@@ -1,3 +1,8 @@
 uploads = []
 generated = []
-outputs = []
+
+[[outputs]]
+id = "847RMOfTHnIK5JmRBCb_J"
+uri = "file://Kagayan_Dojo_Tracker_Script.md"
+type = "text"
+title = "Kagay-an Dojo Tracker — Presentation Script"
