@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import { UserRole } from "@/types";
+import { PasswordInput } from "@/components/PasswordInput";
 
 const ROLES: Array<{ label: string; desc: string; value: UserRole }> = [
   { label: "Sensei", desc: "Head instructor with full access", value: "sensei" },
@@ -92,9 +93,9 @@ export default function RegisterInstructorScreen() {
           <Label label="EMAIL *" colors={colors} />
           <TextInput style={[styles.input, iStyle(colors)]} value={email} onChangeText={setEmail} placeholder="coach@kagayan.com" placeholderTextColor={colors.mutedForeground} autoCapitalize="none" keyboardType="email-address" />
           <Label label="PASSWORD *" colors={colors} />
-          <TextInput style={[styles.input, iStyle(colors)]} value={password} onChangeText={setPassword} placeholder="Min. 6 characters" placeholderTextColor={colors.mutedForeground} secureTextEntry />
+          <PasswordInput style={[styles.input, iStyle(colors)]} value={password} onChangeText={setPassword} placeholder="Min. 6 characters" placeholderTextColor={colors.mutedForeground} />
           <Label label="CONFIRM PASSWORD *" colors={colors} />
-          <TextInput style={[styles.input, iStyle(colors)]} value={confirmPassword} onChangeText={setConfirmPassword} placeholder="Re-enter password" placeholderTextColor={colors.mutedForeground} secureTextEntry />
+          <PasswordInput style={[styles.input, iStyle(colors)]} value={confirmPassword} onChangeText={setConfirmPassword} placeholder="Re-enter password" placeholderTextColor={colors.mutedForeground} />
         </View>
 
         <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>

@@ -17,6 +17,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
 import { AdminAccount, PlayerAccount } from "@/types";
+import { PasswordInput } from "@/components/PasswordInput";
 
 const ADMIN_ACCOUNTS_KEY = "kagayan_admin_accounts";
 const PLAYER_ACCOUNTS_KEY = "kagayan_player_accounts";
@@ -160,22 +161,20 @@ export default function ForgotPasswordScreen() {
               <Text style={[styles.cardTitle, { color: colors.foreground }]}>Set New Password</Text>
 
               <Text style={[styles.label, { color: colors.mutedForeground }]}>NEW PASSWORD</Text>
-              <TextInput
+              <PasswordInput
                 style={[styles.input, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.background }]}
                 value={newPassword}
                 onChangeText={setNewPassword}
                 placeholder="Min. 6 characters"
                 placeholderTextColor={colors.mutedForeground}
-                secureTextEntry
               />
               <Text style={[styles.label, { color: colors.mutedForeground }]}>CONFIRM PASSWORD</Text>
-              <TextInput
+              <PasswordInput
                 style={[styles.input, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.background }]}
                 value={confirmPassword}
                 onChangeText={setConfirmPassword}
                 placeholder="Re-enter password"
                 placeholderTextColor={colors.mutedForeground}
-                secureTextEntry
               />
 
               {error ? <View style={styles.errorBox}><Text style={styles.errorText}>{error}</Text></View> : null}

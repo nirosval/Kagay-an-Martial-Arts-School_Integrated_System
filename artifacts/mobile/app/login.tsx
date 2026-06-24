@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
 import { usePlayerAuth } from "@/context/PlayerAuthContext";
 import { useColors } from "@/hooks/useColors";
+import { PasswordInput } from "@/components/PasswordInput";
 
 const dojoLogo = require("../assets/images/logo.png");
 
@@ -136,11 +137,10 @@ export default function LoginScreen() {
                   autoCapitalize="none" keyboardType="email-address"
                 />
                 <FieldLabel label="PASSWORD" color={colors.mutedForeground} />
-                <TextInput
+                <PasswordInput
                   style={[styles.input, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.background }]}
                   value={iPassword} onChangeText={setIPassword}
                   placeholder="••••••••" placeholderTextColor={colors.mutedForeground}
-                  secureTextEntry
                 />
 
                 {iError ? <ErrorBox msg={iError} /> : null}
@@ -176,11 +176,10 @@ export default function LoginScreen() {
                   autoCapitalize="none" keyboardType="email-address"
                 />
                 <FieldLabel label="PASSWORD" color={colors.mutedForeground} />
-                <TextInput
+                <PasswordInput
                   style={[styles.input, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.background }]}
                   value={pPassword} onChangeText={setPPassword}
                   placeholder="••••••••" placeholderTextColor={colors.mutedForeground}
-                  secureTextEntry
                 />
 
                 {pError ? <ErrorBox msg={pError} /> : null}

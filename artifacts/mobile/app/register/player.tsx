@@ -17,6 +17,7 @@ import { usePlayerAuth } from "@/context/PlayerAuthContext";
 import { usePlayers } from "@/context/PlayersContext";
 import { useColors } from "@/hooks/useColors";
 import { MembershipStatus, PlayerAccount } from "@/types";
+import { PasswordInput } from "@/components/PasswordInput";
 
 const BELT_RANKS = [
   "White Belt", "Yellow Belt", "Orange Belt", "Green Belt",
@@ -132,9 +133,9 @@ export default function RegisterPlayerScreen() {
           <FieldLabel label="EMAIL *" colors={colors} />
           <TextInput style={[styles.input, inputStyle(colors)]} value={email} onChangeText={setEmail} placeholder="player@email.com" placeholderTextColor={colors.mutedForeground} autoCapitalize="none" keyboardType="email-address" />
           <FieldLabel label="PASSWORD *" colors={colors} />
-          <TextInput style={[styles.input, inputStyle(colors)]} value={password} onChangeText={setPassword} placeholder="Min. 6 characters" placeholderTextColor={colors.mutedForeground} secureTextEntry />
+          <PasswordInput style={[styles.input, inputStyle(colors)]} value={password} onChangeText={setPassword} placeholder="Min. 6 characters" placeholderTextColor={colors.mutedForeground} />
           <FieldLabel label="CONFIRM PASSWORD *" colors={colors} />
-          <TextInput style={[styles.input, inputStyle(colors)]} value={confirmPassword} onChangeText={setConfirmPassword} placeholder="Re-enter password" placeholderTextColor={colors.mutedForeground} secureTextEntry />
+          <PasswordInput style={[styles.input, inputStyle(colors)]} value={confirmPassword} onChangeText={setConfirmPassword} placeholder="Re-enter password" placeholderTextColor={colors.mutedForeground} />
         </Section>
 
         {/* Personal info */}
