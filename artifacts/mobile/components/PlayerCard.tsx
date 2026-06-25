@@ -4,6 +4,7 @@ import React from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { BeltBadge } from "@/components/BeltBadge";
 import { StatusBadge } from "@/components/StatusBadge";
+import { useDues } from "@/context/DuesContext";
 import { useColors } from "@/hooks/useColors";
 import { Player } from "@/types";
 
@@ -11,9 +12,13 @@ interface Props {
   player: Player;
 }
 
+const CURRENT_MONTH = new Date().toISOString().slice(0, 7);
+
 export function PlayerCard({ player }: Props) {
   const colors = useColors();
+  const { getMonthStatus } = useDues();
   const yearsActive = new Date().getFullYear() - player.year_started;
+  const duesStatus = getMonthStatus(player.id, CURRENT_MONTH);
 
   return (
     <Pressable
@@ -51,6 +56,12 @@ export function PlayerCard({ player }: Props) {
           </View>
           <View style={styles.statusRow}>
             <StatusBadge status={player.membership_status} size="sm" />
+            {duesStatus === "overdue" && (
+              <View style={styles.overdueBadge}>
+                <Feather name="alert-circle" size={9} color="#EF4444" />
+                <Text style={styles.overdueBadgeText}>OVERDUE</Text>
+              </View>
+            )}
           </View>
         </View>
         <View style={styles.metaRight}>
@@ -133,5 +144,21 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontFamily: "Inter_500Medium",
     textTransform: "uppercase",
+  },
+  overdueBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    backgroundColor: "#FEE2E2",
+    borderRadius: 4,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    alignSelf: "flex-start",
+  },
+  overdueBadgeText: {
+    fontSize: 9,
+    fontFamily: "Inter_700Bold",
+    color: "#EF4444",
+    letterSpacing: 0.3,
   },
 });

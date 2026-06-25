@@ -3,6 +3,7 @@ import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
+import { router } from "expo-router";
 import React, { useMemo, useRef, useState, useEffect } from "react";
 import {
   Image,
@@ -17,6 +18,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BeltBadge } from "@/components/BeltBadge";
 import { useAttendance } from "@/context/AttendanceContext";
 import { useAuth } from "@/context/AuthContext";
+import { useDues } from "@/context/DuesContext";
 import { usePlayers } from "@/context/PlayersContext";
 import { useColors } from "@/hooks/useColors";
 
@@ -137,6 +139,7 @@ export default function DashboardScreen() {
     records, getTodayAll, getTodayStaffRecord, staffTimeIn, staffTimeOut,
     getTodayPresentStaff,
   } = useAttendance();
+  const { getAllForMonth } = useDues();
 
   const [attLoading, setAttLoading] = useState(false);
   const [now, setNow] = useState(new Date());
@@ -209,6 +212,20 @@ export default function DashboardScreen() {
     }
     return days;
   }, [records, players]);
+
+  const currentMonth = new Date().toISOString().slice(0, 7);
+  const currentMonthLabel = new Date().toLocaleDateString("en-PH", { month: "long", year: "numeric" });
+
+  const duesSummary = useMemo(() => {
+    const activePlayers = players.filter((p) => p.membership_status !== "inactive");
+    const monthRecords = getAllForMonth(currentMonth);
+    const paidIds = new Set(monthRecords.filter((r) => r.status === "paid").map((r) => r.playerId));
+    const overdueIds = new Set(monthRecords.filter((r) => r.status === "overdue").map((r) => r.playerId));
+    const paid = activePlayers.filter((p) => paidIds.has(p.id)).length;
+    const overdue = activePlayers.filter((p) => overdueIds.has(p.id)).length;
+    const pending = activePlayers.length - paid - overdue;
+    return { paid, overdue, pending, total: activePlayers.length };
+  }, [players, getAllForMonth, currentMonth]);
 
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
 
@@ -395,6 +412,38 @@ export default function DashboardScreen() {
           <StatCard label="Active Members" value={stats.members} icon="check-circle" accent="#10B981" />
           <StatCard label="Non-Members" value={stats.nonMembers} icon="alert-circle" accent="#F59E0B" />
           <StatCard label="Achievements" value={stats.totalAchievements} icon="award" accent={colors.accent} />
+        </View>
+
+        {/* Dues Overview */}
+        <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View style={styles.sectionHeaderRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Dues Overview</Text>
+              <Text style={[styles.sectionSub, { color: colors.mutedForeground }]}>{currentMonthLabel}</Text>
+            </View>
+            <Pressable
+              onPress={() => router.push("/(tabs)/dues")}
+              style={({ pressed }) => [styles.pdfBtn, { opacity: pressed ? 0.7 : 1 }]}
+            >
+              <Feather name="credit-card" size={13} color="#1E40AF" />
+              <Text style={styles.pdfBtnText}>Manage</Text>
+            </Pressable>
+          </View>
+          <View style={styles.statusRow}>
+            <StatusPill label="Paid" count={duesSummary.paid} color="#10B981" colors={colors} />
+            <StatusPill label="Overdue" count={duesSummary.overdue} color="#EF4444" colors={colors} />
+            <StatusPill label="Pending" count={duesSummary.pending} color="#F59E0B" colors={colors} />
+          </View>
+          {duesSummary.total > 0 && duesSummary.paid > 0 && (
+            <View style={{ gap: 4 }}>
+              <View style={[styles.progressTrack, { backgroundColor: colors.border }]}>
+                <View style={[styles.progressFill, { backgroundColor: "#10B981", width: `${Math.round((duesSummary.paid / duesSummary.total) * 100)}%` }]} />
+              </View>
+              <Text style={[styles.progressLabel, { color: colors.mutedForeground }]}>
+                {duesSummary.paid} of {duesSummary.total} players paid this month
+              </Text>
+            </View>
+          )}
         </View>
 
         {/* Player Attendance Status Overview */}

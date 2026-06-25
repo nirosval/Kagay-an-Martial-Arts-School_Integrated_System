@@ -19,6 +19,7 @@ import { AttendanceProvider } from "@/context/AttendanceContext";
 import { AnnouncementsProvider } from "@/context/AnnouncementsContext";
 import { PlayerAuthProvider } from "@/context/PlayerAuthContext";
 import { PlayersProvider } from "@/context/PlayersContext";
+import { DuesProvider } from "@/context/DuesContext";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -78,9 +79,11 @@ export default function RootLayout() {
                 <AnnouncementsProvider>
                   <PlayersProvider>
                     <AttendanceProvider>
-                      <PlayerAuthProvider>
-                        <RootLayoutNav />
-                      </PlayerAuthProvider>
+                      <DuesProvider>
+                        <PlayerAuthProvider>
+                          <RootLayoutNav />
+                        </PlayerAuthProvider>
+                      </DuesProvider>
                     </AttendanceProvider>
                   </PlayersProvider>
                 </AnnouncementsProvider>

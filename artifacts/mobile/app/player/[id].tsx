@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BeltBadge } from "@/components/BeltBadge";
 import { StatBlock } from "@/components/StatBlock";
 import { StatusBadge } from "@/components/StatusBadge";
+import { useDues } from "@/context/DuesContext";
 import { usePlayers } from "@/context/PlayersContext";
 import { useColors } from "@/hooks/useColors";
 
@@ -24,6 +25,7 @@ export default function PlayerProfileScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { getPlayer, deletePlayer, addAchievement, deleteAchievement } = usePlayers();
+  const { getPlayerDues } = useDues();
   const player = getPlayer(id ?? "");
 
   const [showAchForm, setShowAchForm] = useState(false);
@@ -46,6 +48,7 @@ export default function PlayerProfileScreen() {
   }
 
   const yearsActive = new Date().getFullYear() - player.year_started;
+  const playerDues = getPlayerDues(player.id);
 
   const handleDelete = () => {
     if (Platform.OS === "web") {
@@ -278,6 +281,50 @@ export default function PlayerProfileScreen() {
                   </View>
                 </View>
               ))
+            )}
+          </View>
+
+          {/* Payment History */}
+          <View style={[styles.infoCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Text style={[styles.cardTitle, { color: colors.foreground }]}>Payment History</Text>
+            {playerDues.length === 0 ? (
+              <View style={{ alignItems: "center", paddingVertical: 16, gap: 8 }}>
+                <Feather name="credit-card" size={28} color={colors.mutedForeground} />
+                <Text style={[styles.infoLabel, { color: colors.mutedForeground, textAlign: "center" }]}>
+                  No dues records yet
+                </Text>
+              </View>
+            ) : (
+              playerDues.map((rec, i) => {
+                const statusColors: Record<string, string> = { paid: "#10B981", overdue: "#EF4444", pending: "#F59E0B" };
+                const statusBg: Record<string, string> = { paid: "#D1FAE5", overdue: "#FEE2E2", pending: "#FEF3C7" };
+                const sc = statusColors[rec.status] ?? "#9CA3AF";
+                const bg = statusBg[rec.status] ?? "#F3F4F6";
+                const monthLabel = new Date(rec.month + "-01").toLocaleDateString("en-PH", { month: "long", year: "numeric" });
+                return (
+                  <View key={rec.id}>
+                    {i > 0 && <View style={[styles.sep, { backgroundColor: colors.border }]} />}
+                    <View style={[styles.infoRow, { alignItems: "flex-start" }]}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.infoValue, { color: colors.foreground }]}>{monthLabel}</Text>
+                        {rec.status === "paid" && rec.paidDate && (
+                          <Text style={[styles.infoLabel, { color: colors.mutedForeground }]}>
+                            Paid {new Date(rec.paidDate).toLocaleDateString("en-PH", { month: "short", day: "numeric" })} · ₱{rec.amount.toLocaleString()}
+                          </Text>
+                        )}
+                        {rec.notes ? (
+                          <Text style={[styles.infoLabel, { color: colors.mutedForeground, fontStyle: "italic" }]}>{rec.notes}</Text>
+                        ) : null}
+                      </View>
+                      <View style={[{ borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, backgroundColor: bg }]}>
+                        <Text style={{ fontSize: 11, fontFamily: "Inter_700Bold", color: sc, textTransform: "capitalize" }}>
+                          {rec.status}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                );
+              })
             )}
           </View>
 
