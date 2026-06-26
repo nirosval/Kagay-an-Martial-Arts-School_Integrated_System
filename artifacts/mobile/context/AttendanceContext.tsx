@@ -4,34 +4,30 @@ import React, {
   useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
 } from "react";
+import { supabase } from "@/lib/supabase";
 import { AttendanceRecord, StaffAttendanceRecord, UserRole } from "@/types";
 
 const STORAGE_KEY = "kagayan_attendance";
 const STAFF_STORAGE_KEY = "kagayan_staff_attendance";
 const SESSIONS_PER_PROMO = 12;
 
-// Schedule: Tue & Thu 5pm-8pm, Saturday 1pm-4pm
-// Late = arrived after session start time
+const SUPABASE_CONFIGURED =
+  Boolean(process.env.EXPO_PUBLIC_SUPABASE_URL) &&
+  Boolean(process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY);
+
 function computeStatus(timeInIso: string): AttendanceRecord["status"] {
   const d = new Date(timeInIso);
-  const day = d.getDay(); // 0=Sun,1=Mon,2=Tue,3=Wed,4=Thu,5=Fri,6=Sat
+  const day = d.getDay();
   const totalMins = d.getHours() * 60 + d.getMinutes();
-
-  if (day === 2 || day === 4) {
-    // Tuesday / Thursday: session starts 5:00 PM
-    return totalMins > 17 * 60 ? "late" : "present";
-  }
-  if (day === 6) {
-    // Saturday: session starts 1:00 PM
-    return totalMins > 13 * 60 ? "late" : "present";
-  }
+  if (day === 2 || day === 4) return totalMins > 17 * 60 ? "late" : "present";
+  if (day === 6) return totalMins > 13 * 60 ? "late" : "present";
   return "present";
 }
 
 interface AttendanceContextType {
-  // Player attendance
   records: AttendanceRecord[];
   isLoading: boolean;
   timeIn: (playerId: string) => Promise<AttendanceRecord>;
@@ -41,7 +37,6 @@ interface AttendanceContextType {
   getCompletedSessionCount: (playerId: string) => number;
   getPromoProgress: (playerId: string) => { completed: number; remaining: number; block: number };
   getTodayAll: () => AttendanceRecord[];
-  // Staff attendance
   staffRecords: StaffAttendanceRecord[];
   staffTimeIn: (staffId: string, staffName: string, staffRole: UserRole, staffPhotoUrl?: string) => Promise<void>;
   staffTimeOut: (staffId: string) => Promise<void>;
@@ -55,29 +50,77 @@ function todayStr(): string {
   return new Date().toISOString().split("T")[0];
 }
 
+function rowToRecord(row: Record<string, unknown>): AttendanceRecord {
+  return {
+    id: row.id as string,
+    playerId: row.player_id as string,
+    date: row.date as string,
+    time_in: row.time_in as string,
+    time_out: (row.time_out as string | null) ?? null,
+    status: row.status as AttendanceRecord["status"],
+  };
+}
+
+function rowToStaffRecord(row: Record<string, unknown>): StaffAttendanceRecord {
+  return {
+    id: row.id as string,
+    staffId: row.staff_id as string,
+    staffName: row.staff_name as string,
+    staffRole: row.staff_role as UserRole,
+    staffPhotoUrl: (row.staff_photo_url as string | undefined) ?? undefined,
+    date: row.date as string,
+    time_in: row.time_in as string,
+    time_out: (row.time_out as string | null) ?? null,
+  };
+}
+
 export function AttendanceProvider({ children }: { children: React.ReactNode }) {
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
   const [staffRecords, setStaffRecords] = useState<StaffAttendanceRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const usingSupabase = useRef(false);
 
   useEffect(() => {
-    Promise.all([
-      AsyncStorage.getItem(STORAGE_KEY).catch(() => null),
-      AsyncStorage.getItem(STAFF_STORAGE_KEY).catch(() => null),
-    ]).then(([stored, storedStaff]) => {
-      if (stored) { try { setRecords(JSON.parse(stored)); } catch { /* ignore */ } }
-      if (storedStaff) { try { setStaffRecords(JSON.parse(storedStaff)); } catch { /* ignore */ } }
-    }).catch(() => { /* storage unavailable */ }).finally(() => {
-      setIsLoading(false);
-    });
+    (async () => {
+      if (SUPABASE_CONFIGURED) {
+        try {
+          const [{ data: attData, error: attErr }, { data: staffData, error: staffErr }] =
+            await Promise.all([
+              supabase.from("attendance").select("*").order("time_in"),
+              supabase.from("staff_attendance").select("*").order("time_in"),
+            ]);
+          if (!attErr && attData !== null && !staffErr && staffData !== null) {
+            usingSupabase.current = true;
+            setRecords(attData.map(rowToRecord));
+            setStaffRecords(staffData.map(rowToStaffRecord));
+            setIsLoading(false);
+            return;
+          }
+        } catch {
+          // fall through to AsyncStorage
+        }
+      }
+
+      // Fallback: AsyncStorage
+      Promise.all([
+        AsyncStorage.getItem(STORAGE_KEY).catch(() => null),
+        AsyncStorage.getItem(STAFF_STORAGE_KEY).catch(() => null),
+      ])
+        .then(([stored, storedStaff]) => {
+          if (stored) { try { setRecords(JSON.parse(stored)); } catch { /* ignore */ } }
+          if (storedStaff) { try { setStaffRecords(JSON.parse(storedStaff)); } catch { /* ignore */ } }
+        })
+        .catch(() => { /* storage unavailable */ })
+        .finally(() => { setIsLoading(false); });
+    })();
   }, []);
 
-  const persist = useCallback(async (updated: AttendanceRecord[]) => {
+  const persistLocal = useCallback(async (updated: AttendanceRecord[]) => {
     setRecords(updated);
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
   }, []);
 
-  const persistStaff = useCallback(async (updated: StaffAttendanceRecord[]) => {
+  const persistStaffLocal = useCallback(async (updated: StaffAttendanceRecord[]) => {
     setStaffRecords(updated);
     await AsyncStorage.setItem(STAFF_STORAGE_KEY, JSON.stringify(updated));
   }, []);
@@ -93,19 +136,43 @@ export function AttendanceProvider({ children }: { children: React.ReactNode }) 
       time_out: null,
       status: computeStatus(now),
     };
-    await persist([...records, newRecord]);
+
+    if (usingSupabase.current) {
+      const { error } = await supabase.from("attendance").insert({
+        id: newRecord.id,
+        player_id: newRecord.playerId,
+        date: newRecord.date,
+        time_in: newRecord.time_in,
+        time_out: newRecord.time_out,
+        status: newRecord.status,
+      });
+      if (error) throw error;
+      setRecords((prev) => [...prev, newRecord]);
+    } else {
+      await persistLocal([...records, newRecord]);
+    }
     return newRecord;
-  }, [records, persist]);
+  }, [records, persistLocal]);
 
   const timeOut = useCallback(async (playerId: string): Promise<void> => {
     const today = todayStr();
     const now = new Date().toISOString();
-    await persist(records.map((r) =>
-      r.playerId === playerId && r.date === today && r.time_out === null
-        ? { ...r, time_out: now }
-        : r
-    ));
-  }, [records, persist]);
+    const rec = records.find((r) => r.playerId === playerId && r.date === today && r.time_out === null);
+
+    if (usingSupabase.current && rec) {
+      const { error } = await supabase.from("attendance").update({ time_out: now }).eq("id", rec.id);
+      if (error) throw error;
+      setRecords((prev) =>
+        prev.map((r) => r.id === rec.id ? { ...r, time_out: now } : r)
+      );
+    } else {
+      await persistLocal(records.map((r) =>
+        r.playerId === playerId && r.date === today && r.time_out === null
+          ? { ...r, time_out: now }
+          : r
+      ));
+    }
+  }, [records, persistLocal]);
 
   const getTodayRecord = useCallback(
     (playerId: string) => records.find((r) => r.playerId === playerId && r.date === todayStr()),
@@ -152,18 +219,44 @@ export function AttendanceProvider({ children }: { children: React.ReactNode }) 
       time_in: now,
       time_out: null,
     };
-    await persistStaff([...staffRecords, newRecord]);
-  }, [staffRecords, persistStaff]);
+
+    if (usingSupabase.current) {
+      const { error } = await supabase.from("staff_attendance").insert({
+        id: newRecord.id,
+        staff_id: newRecord.staffId,
+        staff_name: newRecord.staffName,
+        staff_role: newRecord.staffRole,
+        staff_photo_url: newRecord.staffPhotoUrl ?? null,
+        date: newRecord.date,
+        time_in: newRecord.time_in,
+        time_out: newRecord.time_out,
+      });
+      if (error) throw error;
+      setStaffRecords((prev) => [...prev, newRecord]);
+    } else {
+      await persistStaffLocal([...staffRecords, newRecord]);
+    }
+  }, [staffRecords, persistStaffLocal]);
 
   const staffTimeOut = useCallback(async (staffId: string): Promise<void> => {
     const today = todayStr();
     const now = new Date().toISOString();
-    await persistStaff(staffRecords.map((r) =>
-      r.staffId === staffId && r.date === today && r.time_out === null
-        ? { ...r, time_out: now }
-        : r
-    ));
-  }, [staffRecords, persistStaff]);
+    const rec = staffRecords.find((r) => r.staffId === staffId && r.date === today && r.time_out === null);
+
+    if (usingSupabase.current && rec) {
+      const { error } = await supabase.from("staff_attendance").update({ time_out: now }).eq("id", rec.id);
+      if (error) throw error;
+      setStaffRecords((prev) =>
+        prev.map((r) => r.id === rec.id ? { ...r, time_out: now } : r)
+      );
+    } else {
+      await persistStaffLocal(staffRecords.map((r) =>
+        r.staffId === staffId && r.date === today && r.time_out === null
+          ? { ...r, time_out: now }
+          : r
+      ));
+    }
+  }, [staffRecords, persistStaffLocal]);
 
   const getTodayStaffRecord = useCallback(
     (staffId: string) => staffRecords.find((r) => r.staffId === staffId && r.date === todayStr()),

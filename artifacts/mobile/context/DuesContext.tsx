@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { supabase } from "@/lib/supabase";
 
 export type DuesStatus = "paid" | "overdue" | "pending";
 
@@ -31,22 +32,57 @@ const DuesContext = createContext<DuesContextType | undefined>(undefined);
 const STORAGE_KEY = "kagayan_dues";
 export const DEFAULT_DUES_AMOUNT = 500;
 
+const SUPABASE_CONFIGURED =
+  Boolean(process.env.EXPO_PUBLIC_SUPABASE_URL) &&
+  Boolean(process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY);
+
+function rowToRecord(row: Record<string, unknown>): DuesRecord {
+  return {
+    id: row.id as string,
+    playerId: row.player_id as string,
+    month: row.month as string,
+    amount: Number(row.amount),
+    status: row.status as DuesStatus,
+    paidDate: (row.paid_date as string | undefined) ?? undefined,
+    notes: (row.notes as string | undefined) ?? undefined,
+    createdAt: row.created_at as string,
+  };
+}
+
 export function DuesProvider({ children }: { children: React.ReactNode }) {
   const [records, setRecords] = useState<DuesRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const usingSupabase = useRef(false);
 
   useEffect(() => {
-    AsyncStorage.getItem(STORAGE_KEY)
-      .catch(() => null)
-      .then((stored) => {
-        if (stored) {
-          try { setRecords(JSON.parse(stored)); } catch { /* ignore */ }
+    (async () => {
+      if (SUPABASE_CONFIGURED) {
+        try {
+          const { data, error } = await supabase.from("dues").select("*").order("month");
+          if (!error && data !== null) {
+            usingSupabase.current = true;
+            setRecords(data.map(rowToRecord));
+            setIsLoading(false);
+            return;
+          }
+        } catch {
+          // fall through to AsyncStorage
         }
-      })
-      .finally(() => setIsLoading(false));
+      }
+
+      // Fallback: AsyncStorage
+      AsyncStorage.getItem(STORAGE_KEY)
+        .catch(() => null)
+        .then((stored) => {
+          if (stored) {
+            try { setRecords(JSON.parse(stored)); } catch { /* ignore */ }
+          }
+        })
+        .finally(() => setIsLoading(false));
+    })();
   }, []);
 
-  const persist = useCallback(async (updated: DuesRecord[]) => {
+  const persistLocal = useCallback(async (updated: DuesRecord[]) => {
     setRecords(updated);
     try { await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated)); } catch { /* ignore */ }
   }, []);
@@ -77,6 +113,48 @@ export function DuesProvider({ children }: { children: React.ReactNode }) {
   const upsert = useCallback(
     async (playerId: string, month: string, patch: Partial<DuesRecord>) => {
       const existing = records.find((r) => r.playerId === playerId && r.month === month);
+
+      if (usingSupabase.current) {
+        if (existing) {
+          const { error } = await supabase.from("dues").update({
+            status: patch.status ?? existing.status,
+            amount: patch.amount ?? existing.amount,
+            paid_date: patch.paidDate ?? null,
+            notes: patch.notes ?? null,
+          }).eq("id", existing.id);
+          if (error) throw error;
+          setRecords((prev) =>
+            prev.map((r) =>
+              r.playerId === playerId && r.month === month ? { ...r, ...patch } : r
+            )
+          );
+        } else {
+          const newRec: DuesRecord = {
+            id: Date.now().toString() + Math.random().toString(36).substr(2, 6),
+            playerId,
+            month,
+            amount: DEFAULT_DUES_AMOUNT,
+            status: "pending",
+            createdAt: new Date().toISOString(),
+            ...patch,
+          };
+          const { error } = await supabase.from("dues").insert({
+            id: newRec.id,
+            player_id: newRec.playerId,
+            month: newRec.month,
+            amount: newRec.amount,
+            status: newRec.status,
+            paid_date: newRec.paidDate ?? null,
+            notes: newRec.notes ?? null,
+            created_at: newRec.createdAt,
+          });
+          if (error) throw error;
+          setRecords((prev) => [...prev, newRec]);
+        }
+        return;
+      }
+
+      // AsyncStorage path
       let updated: DuesRecord[];
       if (existing) {
         updated = records.map((r) =>
@@ -96,9 +174,9 @@ export function DuesProvider({ children }: { children: React.ReactNode }) {
           },
         ];
       }
-      await persist(updated);
+      await persistLocal(updated);
     },
-    [records, persist]
+    [records, persistLocal]
   );
 
   const markPaid = useCallback(

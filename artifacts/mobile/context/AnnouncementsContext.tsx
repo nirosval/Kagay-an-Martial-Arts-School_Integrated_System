@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { supabase } from "@/lib/supabase";
 import { Announcement, AnnouncementCategory, UserRole } from "@/types";
 
 interface AnnouncementsContextType {
@@ -19,20 +20,53 @@ interface AnnouncementsContextType {
 const AnnouncementsContext = createContext<AnnouncementsContextType | undefined>(undefined);
 const KEY = "kagayan_announcements";
 
+const SUPABASE_CONFIGURED =
+  Boolean(process.env.EXPO_PUBLIC_SUPABASE_URL) &&
+  Boolean(process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY);
+
+function rowToAnnouncement(row: Record<string, unknown>): Announcement {
+  return {
+    id: row.id as string,
+    category: row.category as AnnouncementCategory,
+    title: row.title as string,
+    body: row.body as string,
+    venue: (row.venue as string | undefined) ?? undefined,
+    eventDate: (row.event_date as string | undefined) ?? undefined,
+    createdBy: row.created_by as string,
+    createdByRole: row.created_by_role as UserRole,
+    createdAt: row.created_at as string,
+  };
+}
+
 export function AnnouncementsProvider({ children }: { children: React.ReactNode }) {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const usingSupabase = useRef(false);
 
   useEffect(() => {
-    AsyncStorage.getItem(KEY).then((stored) => {
-      if (stored) {
-        try { setAnnouncements(JSON.parse(stored)); } catch { /* ignore */ }
+    (async () => {
+      if (SUPABASE_CONFIGURED) {
+        try {
+          const { data, error } = await supabase
+            .from("announcements")
+            .select("*")
+            .order("created_at", { ascending: false });
+          if (!error && data !== null) {
+            usingSupabase.current = true;
+            setAnnouncements(data.map(rowToAnnouncement));
+            return;
+          }
+        } catch {
+          // fall through to AsyncStorage
+        }
       }
-    });
-  }, []);
 
-  const persist = useCallback(async (list: Announcement[]) => {
-    setAnnouncements(list);
-    await AsyncStorage.setItem(KEY, JSON.stringify(list));
+      // Fallback: AsyncStorage
+      AsyncStorage.getItem(KEY).then((stored) => {
+        if (stored) {
+          try { setAnnouncements(JSON.parse(stored)); } catch { /* ignore */ }
+        }
+      });
+    })();
   }, []);
 
   const addAnnouncement = useCallback(
@@ -56,20 +90,51 @@ export function AnnouncementsProvider({ children }: { children: React.ReactNode 
         createdByRole,
         createdAt: new Date().toISOString(),
       };
+
+      if (usingSupabase.current) {
+        const { error } = await supabase.from("announcements").insert({
+          id: newAnn.id,
+          category: newAnn.category,
+          title: newAnn.title,
+          body: newAnn.body,
+          venue: newAnn.venue ?? null,
+          event_date: newAnn.eventDate ?? null,
+          created_by: newAnn.createdBy,
+          created_by_role: newAnn.createdByRole,
+          created_at: newAnn.createdAt,
+        });
+        if (error) throw error;
+        setAnnouncements((prev) => [newAnn, ...prev]);
+        return;
+      }
+
+      // AsyncStorage path
       const stored = await AsyncStorage.getItem(KEY);
       const list: Announcement[] = stored ? JSON.parse(stored) : [];
-      await persist([newAnn, ...list]);
+      const updated = [newAnn, ...list];
+      setAnnouncements(updated);
+      await AsyncStorage.setItem(KEY, JSON.stringify(updated));
     },
-    [persist]
+    []
   );
 
   const deleteAnnouncement = useCallback(
     async (id: string) => {
+      if (usingSupabase.current) {
+        const { error } = await supabase.from("announcements").delete().eq("id", id);
+        if (error) throw error;
+        setAnnouncements((prev) => prev.filter((a) => a.id !== id));
+        return;
+      }
+
+      // AsyncStorage path
       const stored = await AsyncStorage.getItem(KEY);
       const list: Announcement[] = stored ? JSON.parse(stored) : [];
-      await persist(list.filter((a) => a.id !== id));
+      const updated = list.filter((a) => a.id !== id);
+      setAnnouncements(updated);
+      await AsyncStorage.setItem(KEY, JSON.stringify(updated));
     },
-    [persist]
+    []
   );
 
   return (
