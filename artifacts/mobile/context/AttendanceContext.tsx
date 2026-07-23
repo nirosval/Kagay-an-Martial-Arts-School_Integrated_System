@@ -141,7 +141,6 @@ export function AttendanceProvider({ children }: { children: React.ReactNode }) 
       const { error } = await supabase.from("attendance").insert({
         id: newRecord.id,
         player_id: newRecord.playerId,
-        date: newRecord.date,
         time_in: newRecord.time_in,
         time_out: newRecord.time_out,
         status: newRecord.status,
