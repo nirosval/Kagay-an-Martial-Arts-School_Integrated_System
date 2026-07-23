@@ -152,18 +152,46 @@ export default function PlayerPortalScreen() {
   };
 
   const handleTimeIn = async () => {
-    setAttLoading(true);
+  setAttLoading(true);
+  try {
     await timeIn(player.id);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    setAttLoading(false);
-  };
 
-  const handleTimeOut = async () => {
-    setAttLoading(true);
-    await timeOut(player.id);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    // Haptics support for native devices only
+    if (Platform.OS !== "web") {
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
+  } catch (error: any) {
+    console.error("Time-in failed:", error);
+    if (Platform.OS === "web") {
+      window.alert("Time-in failed: " + (error?.message || "Check network/Supabase logs"));
+    } else {
+      Alert.alert("Time-in Failed", error?.message || "Something went wrong.");
+    }
+  } finally {
+    // Siguradong mag-re-reset ang loading state kahit mag-fail o mag-success!
     setAttLoading(false);
-  };
+  }
+};
+
+const handleTimeOut = async () => {
+  setAttLoading(true);
+  try {
+    await timeOut(player.id);
+
+    if (Platform.OS !== "web") {
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
+  } catch (error: any) {
+    console.error("Time-out failed:", error);
+    if (Platform.OS === "web") {
+      window.alert("Time-out failed: " + (error?.message || "Check network/Supabase logs"));
+    } else {
+      Alert.alert("Time-out Failed", error?.message || "Something went wrong.");
+    }
+  } finally {
+    setAttLoading(false);
+  }
+};
 
   const handlePickPhoto = async () => {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
